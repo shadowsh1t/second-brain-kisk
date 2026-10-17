@@ -3,6 +3,17 @@
 All notable changes to Second Brain for KISK. The newest version is at the top.
 When a new version is released, Obsidian offers it under **🆕 A new version of Second Brain is available** with a link to this list.
 
+## 1.0.3 – 2026-10-17
+
+- **Smarter token saver** – the text prepared for the AI now includes slide titles as structure, **tables** from presentations and Word documents as Markdown tables, **chart data**, **speaker notes** and **links**. Slides and pages that are mostly a picture are marked, and their images are unpacked so the AI looks only at those.
+- **Text recognition on your Mac** – text in scanned PDFs, photos and screenshots is recognised by macOS itself (free, no AI, no internet), so the AI reads cheap text instead of images. Materials still waiting in the queue are prepared again with the new extraction; processed ones stay as they are.
+- **Queue** shows how many `/zpracuj` batches are waiting and the estimated tokens including writing the notes, with a tip to start each batch in a new session.
+- **Guide**: new section *Saving your limits* (batches, a new session for every button, Sonnet is enough, why long chats are expensive) and optional Poppler for viewing scans as images.
+- AI rules: scripts are always run with a relative path (no more permission prompts because of absolute paths or `| head`), the overview and course scripts are allowed, and the AI never installs other programs without explaining why and asking first.
+- Fixed: after an update without restarting Obsidian, the plugin showed the old version number (in the update check, settings, diagnostics and bug reports).
+- Fixed: notifications piled up when the plugin was reloaded.
+- Bug report by e-mail now says that the recipient will see your e-mail address and offers GitHub instead.
+
 ## 1.0.2 – 2026-10-17
 
 - The plugin is now called **Second Brain for KISK** in Obsidian (the directory only allows names without diacritics); settings are under *Settings → Second Brain for KISK*.

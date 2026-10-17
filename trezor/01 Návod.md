@@ -99,6 +99,16 @@ Vybereš si při instalaci a **kdykoli AI přidáš, změníš nebo odebereš**:
 - **Soukromí:** s AI se obsah zpracovávaných materiálů posílá jejímu poskytovateli. Bez AI se nic nikam neposílá.
 - **Vlastní příkaz jiné AI:** musí obsahovat značku `{prompt}` (např. `gemini -i {prompt}`) a jen písmena, čísla, mezery a `. _ / = : -`, aby do něj nešlo nic propašovat.
 - **Jazyk poznámek od AI:** AI píše poznámky v jazyce rozhraní.
+- **Skeny a obrázky:** text z nich rozpozná sám macOS (OCR – zdarma, bez AI a bez internetu) a AI pak čte jen text. Chceš-li, aby se Claude mohl na skenovaná PDF dívat i jako na obrázky, nainstaluj volitelně Poppler: v Terminálu `brew install poppler` (potřebuješ [Homebrew](https://brew.sh)). AI sama nic neinstaluje – nejdřív vysvětlí proč a zeptá se.
+
+### 💸 Šetření limitů
+Předplatné Claude má limit použití, který se průběžně obnovuje. Nejvíc ho ušetříš takhle:
+- **Pracuj v dávkách.** `/zpracuj` vezme najednou 8 materiálů. Kolik dávek čeká a kolik tokenů zhruba spotřebují, ukazuje **📥 Fronta ke zpracování**. Velkou frontu rozlož do víc dní.
+- **Každé tlačítko = nové sezení.** Tlačítka s AI otevírají čisté okno, ve kterém AI ví jen to nutné. Po dokončení okno zavři a další dávku spusť znovu tlačítkem.
+- **Dlouhé povídání v jednom okně je drahé.** S každou zprávou AI znovu čte celý dosavadní rozhovor, takže každá další odpověď stojí víc. Na novou věc otevři nové sezení.
+- **Sonnet stačí.** Na výpisky, pojmy a kartičky je Sonnet dost dobrý a čerpá limit pomaleji než Opus. Model přepneš v Claude Code příkazem `/model`.
+- **Text místo obrázků.** `priprav.py` předem zdarma vytáhne text z PDF, Wordu a prezentací (i tabulky, data grafů, poznámky přednášejícího a odkazy) a ze skenů a obrázků ho rozpozná macOS. AI pak čte jen tenhle text a na obrázky se dívá jen tam, kde je na slajdu hlavně obrázek.
+- **Velké materiály** (*VELKÉ* ve frontě) se zpracují jen jako shrnutí a vlastní práce se jen zapíšou do přehledu předmětu.
 
 ### ✍️ Bez AI – co máš navíc
 - **📝 Nová poznámka k materiálu** – poznámka ze šablony, která se sama zařadí k předmětu (Domov ji ukáže); materiál se otevře vedle, takže čteš a píšeš zároveň.

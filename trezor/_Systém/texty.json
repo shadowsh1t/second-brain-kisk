@@ -12,6 +12,10 @@
     "pozn_sken": "SKEN – text chybí, AI čte obrazem jen vybrané strany",
     "pozn_velke": "VELKÉ – zpracuje se jen jako shrnutí",
     "pozn_obrazek": "AI přečte obrázek přímo",
+    "pozn_sken_ocr": "SKEN (OCR) – text rozpoznal macOS, AI otevře originál jen u nejasných stran",
+    "pozn_ocr": "OCR – text z obrázku rozpoznal macOS",
+    "davky": "≈ **{d}×** `/zpracuj` (po 8 materiálech) · i s psaním poznámek ~{t} tokenů",
+    "rada_sezeni": "💡 Každou dávku spusť v novém sezení (tlačítkem nebo v novém okně) – dlouhé sezení s velkým kontextem čerpá limit nejrychleji.",
     "ve_fronte": "Ve frontě: {n} | hotovo: {h} | přeskočeno: {p} | duplicity: {d}",
     "odhad": "Odhad pro AI: ~{a} tokenů místo ~{b} při čtení originálů",
 
@@ -118,6 +122,10 @@
     "pozn_sken": "SKEN – chýba text, AI číta obrazom len vybrané strany",
     "pozn_velke": "VEĽKÉ – spracuje sa len ako súhrn",
     "pozn_obrazek": "AI prečíta obrázok priamo",
+    "pozn_sken_ocr": "SKEN (OCR) – text rozpoznal macOS, AI otvorí originál len pri nejasných stranách",
+    "pozn_ocr": "OCR – text z obrázka rozpoznal macOS",
+    "davky": "≈ **{d}×** `/zpracuj` (po 8 materiáloch) · aj s písaním poznámok ~{t} tokenov",
+    "rada_sezeni": "💡 Každú dávku spusti v novom sedení (tlačidlom alebo v novom okne) – dlhé sedenie s veľkým kontextom čerpá limit najrýchlejšie.",
     "ve_fronte": "Vo fronte: {n} | hotovo: {h} | preskočené: {p} | duplicity: {d}",
     "odhad": "Odhad pre AI: ~{a} tokenov namiesto ~{b} pri čítaní originálov",
 
@@ -224,6 +232,10 @@
     "pozn_sken": "SCAN – no text, AI reads only selected pages as images",
     "pozn_velke": "LARGE – processed as a summary only",
     "pozn_obrazek": "AI reads the image directly",
+    "pozn_sken_ocr": "SCAN (OCR) – text recognised by macOS, AI opens the original only for unclear pages",
+    "pozn_ocr": "OCR – text in the image recognised by macOS",
+    "davky": "≈ **{d}×** `/zpracuj` (8 materials each) · ~{t} tokens including writing the notes",
+    "rada_sezeni": "💡 Start each batch in a new session (with a button or in a new window) – a long session with a large context uses up the limit fastest.",
     "ve_fronte": "In queue: {n} | done: {h} | skipped: {p} | duplicates: {d}",
     "odhad": "AI estimate: ~{a} tokens instead of ~{b} when reading the originals",
 
@@ -330,6 +342,10 @@
     "pozn_sken": "СКАН – немає тексту, ШІ читає як зображення лише вибрані сторінки",
     "pozn_velke": "ВЕЛИКЕ – обробляється лише як підсумок",
     "pozn_obrazek": "ШІ прочитає зображення напряму",
+    "pozn_sken_ocr": "СКАН (OCR) – текст розпізнав macOS, ШІ відкриє оригінал лише для нечітких сторінок",
+    "pozn_ocr": "OCR – текст із зображення розпізнав macOS",
+    "davky": "≈ **{d}×** `/zpracuj` (по 8 матеріалів) · разом із написанням нотаток ~{t} токенів",
+    "rada_sezeni": "💡 Кожну порцію запускай у новому сеансі (кнопкою або в новому вікні) – довгий сеанс із великим контекстом найшвидше вичерпує ліміт.",
     "ve_fronte": "У черзі: {n} | готово: {h} | пропущено: {p} | дублікати: {d}",
     "odhad": "Оцінка для ШІ: ~{a} токенів замість ~{b} при читанні оригіналів",
 

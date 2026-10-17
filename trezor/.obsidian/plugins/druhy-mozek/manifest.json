@@ -1,7 +1,7 @@
 {
   "id": "druhy-mozek",
   "name": "Second Brain for KISK",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "minAppVersion": "1.9.0",
   "description": "Study system for KISK students at Masaryk University: course notes, flashcards, deadlines, courses and Word assignments, with or without AI.",
   "author": "Jakub Josef Sova",

@@ -51,6 +51,28 @@ def pptx(cesta, text):
                    f'<a:t>{text}</a:t></a:r></a:p></p:sld>')
 
 
+def bohata_pptx(cesta):
+    """Slajd s nadpisem, tabulkou, grafem, poznámkami řečníka a odkazy (rels s ../ i s absolutní cestou)."""
+    with zipfile.ZipFile(cesta, "w") as z:
+        z.writestr("ppt/slides/slide1.xml", '<p:sld xmlns:p="p" xmlns:a="a" xmlns:r="r" xmlns:c="c"><p:cSld><p:spTree>'
+                   '<p:sp><p:nvSpPr><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr><p:txBody><a:p><a:r><a:t>Metadata</a:t></a:r></a:p></p:txBody></p:sp>'
+                   '<p:sp><p:txBody><a:p><a:r><a:t>Dublin Core</a:t></a:r></a:p></p:txBody></p:sp>'
+                   '<a:tbl><a:tr><a:tc><a:txBody><a:p><a:r><a:t>Prvek</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc><a:tc><a:txBody><a:p><a:r><a:t>Popis</a:t></a:r></a:p></a:txBody></a:tc></a:tr>'
+                   '<a:tr><a:tc><a:txBody><a:p><a:r><a:t>dc:title</a:t></a:r></a:p></a:txBody></a:tc><a:tc><a:txBody><a:p><a:r><a:t>a | b</a:t></a:r></a:p></a:txBody></a:tc></a:tr></a:tbl>'
+                   '<c:chart r:id="rId3"/></p:spTree></p:cSld></p:sld>')
+        z.writestr("ppt/slides/_rels/slide1.xml.rels", f'<Relationships><Relationship Id="rId2" Type="{R}notesSlide" Target="../notesSlides/notesSlide1.xml"/>'
+                   f'<Relationship Id="rId3" Type="{R}chart" Target="/ppt/charts/chart1.xml"/>'
+                   f'<Relationship Id="rId4" Type="{R}hyperlink" Target="https://example.com/?a=1&amp;b=2" TargetMode="External"/>'
+                   f'<Relationship Id="rId5" Type="{R}hyperlink" Target="file:///Users/x/tajne.pdf" TargetMode="External"/></Relationships>')
+        z.writestr("ppt/notesSlides/notesSlide1.xml", '<p:notes xmlns:p="p" xmlns:a="a"><a:p><a:r><a:t>Zmínit historii</a:t></a:r></a:p>'
+                   '<a:p><a:r><a:t>1</a:t></a:r></a:p></p:notes>')
+        z.writestr("ppt/charts/chart1.xml", '<c:chartSpace xmlns:c="c" xmlns:a="a"><c:chart><c:title><c:tx><c:rich><a:p><a:r><a:t>Záznamy</a:t></a:r></a:p></c:rich></c:tx></c:title>'
+                   '<c:plotArea><c:barChart><c:ser><c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>2025</c:v></c:pt></c:strCache></c:strRef></c:tx>'
+                   '<c:cat><c:strRef><c:strCache><c:pt idx="0"><c:v>Knihy</c:v></c:pt><c:pt idx="1"><c:v>Články</c:v></c:pt></c:strCache></c:strRef></c:cat>'
+                   '<c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>120</c:v></c:pt><c:pt idx="1"><c:v>45</c:v></c:pt></c:numCache></c:numRef></c:val></c:ser>'
+                   '</c:barChart></c:plotArea></c:chart></c:chartSpace>')
+
+
 def platne_xml(cesta):
     with zipfile.ZipFile(cesta) as z:
         for n in z.namelist():
@@ -93,6 +115,64 @@ class Trezor(unittest.TestCase):
         self.spust("_Systém/priprav.py", "--hotovo", fronta[0]["soubor"])
         self.spust("_Systém/priprav.py")
         self.assertEqual(json.loads((self.t / "_Systém/fronta.json").read_text()), [])
+
+    def nastav(self, **zmeny):
+        n = json.loads((self.t / "_Systém/nastaveni.json").read_text())
+        (self.t / "_Systém/nastaveni.json").write_text(json.dumps({**n, **zmeny}))
+
+    def test_extrakce_prezentace(self):
+        self.nastav(ocr=False)
+        bohata_pptx(self.t / PREDMET / "metadata.pptx")
+        self.spust("_Systém/priprav.py")
+        fronta = json.loads((self.t / "_Systém/fronta.json").read_text())
+        text = (self.t / fronta[0]["cache"]).read_text()
+        self.assertIn("=== slajd 1: Metadata ===", text)
+        self.assertNotIn("\nMetadata\n", text, "nadpis jen v hlavičce slajdu")
+        self.assertIn("| Prvek | Popis |\n|---|---|\n| dc:title | a \\| b |", text)
+        self.assertIn("[graf: Záznamy]\n| | 2025 |\n|---|---|\n| Knihy | 120 |\n| Články | 45 |", text)
+        self.assertIn("[poznámky řečníka]\nZmínit historii", text)
+        self.assertIn("[odkazy] https://example.com/?a=1&b=2", text)
+        self.assertNotIn("tajne.pdf", text, "odkazy na soubory v počítači se nevypisují")
+
+    def test_extrakce_dokumentu_s_tabulkou(self):
+        p = lambda t: f"<w:p><w:r><w:t>{t}</w:t></w:r></w:p>"
+        tc = lambda obsah, pr="": f"<w:tc>{pr}{obsah}</w:tc>"
+        vnorena = "<w:tbl><w:tblPr/><w:tr>" + tc(p("A")) + tc(p("B")) + "</w:tr></w:tbl>"
+        body = (p("Před") + "<w:tbl><w:tblPr/><w:tr><w:trPr/>" + tc(p("Jméno")) + tc(p("Hodnota")) + tc(p("Pozn.")) + "</w:tr><w:tr>"
+                + tc(p("Spojeno"), '<w:tcPr><w:gridSpan w:val="2"/></w:tcPr>') + tc(p("x") + vnorena) + "</w:tr></w:tbl>" + p("Za"))
+        with zipfile.ZipFile(self.t / PREDMET / "tabulka.docx", "w") as z:
+            z.writestr("word/document.xml", f'<w:document {W}><w:body>{body}</w:body></w:document>')
+        self.spust("_Systém/priprav.py")
+        text = (self.t / json.loads((self.t / "_Systém/fronta.json").read_text())[0]["cache"]).read_text()
+        self.assertIn("Před\n| Jméno | Hodnota | Pozn. |\n|---|---|---|\n| Spojeno | | x A B |\nZa", text)
+
+    def test_cache_nove_verze(self):
+        """Čekající položka se starou cache se vytvoří znovu, hotová se nemění."""
+        self.nastav(ocr=False)
+        pptx(self.t / PREDMET / "a.pptx", "Nový text A")
+        pptx(self.t / PREDMET / "b.pptx", "Nový text B")
+        self.spust("_Systém/priprav.py")
+        fronta = {Path(f["soubor"]).name: f for f in json.loads((self.t / "_Systém/fronta.json").read_text())}
+        self.spust("_Systém/priprav.py", "--hotovo", fronta["b.pptx"]["soubor"])
+        for f in fronta.values():
+            (self.t / f["cache"]).write_text("<!-- zdroj: x | typ: prezentace | bloků: 1 | odstraněno opakujících se řádků: 0 -->\n\nstará\n")
+        self.spust("_Systém/priprav.py")
+        self.assertIn("Nový text A", (self.t / fronta["a.pptx"]["cache"]).read_text())
+        self.assertIn("stará", (self.t / fronta["b.pptx"]["cache"]).read_text())
+
+    def test_odhad_davek(self):
+        self.nastav(ocr=False)
+        for i in range(9):
+            pptx(self.t / PREDMET / f"p{i}.pptx", f"Přednáška {i}")
+        r = self.spust("_Systém/priprav.py")
+        self.assertIn("2× /zpracuj", r.stdout)
+        fronta = (self.t / "_Systém/Fronta.md").read_text()
+        self.assertIn("≈ **2×** `/zpracuj`", fronta)
+        self.assertIn("💡", fronta)
+        (self.t / PREDMET / "foto.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+        self.spust("_Systém/priprav.py")
+        foto = [f for f in json.loads((self.t / "_Systém/fronta.json").read_text()) if f["soubor"].endswith("foto.png")][0]
+        self.assertEqual((foto["cache"], foto["poznamka"]), (None, "AI přečte obrázek přímo"), "bez OCR čte obrázek AI")
 
     def test_presun_jen_z_inboxu(self):
         (self.t / "_Inbox/material.txt").write_text("x")
@@ -568,6 +648,8 @@ class Repozitar(unittest.TestCase):
         for r in ("Write(_Systém/**/*.json)", "Write(_Systém/**/*.base)", "Write(_Systém/**/*.py)", "Write(.obsidian/**)", "Write(.claude/**)"):
             self.assertIn(r, o["ask"])
         self.assertEqual(o.get("disableBypassPermissionsMode"), "disable")
+        for skript in ("priprav", "novy_ukol", "prehledy", "predmety"):  # AI je volá relativní cestou bez potvrzování
+            self.assertIn(f"Bash(python3 _Systém/{skript}.py:*)", o["allow"])
 
     def test_rozsireni_pro_adresar_obsidianu(self):
         """Verze pro community.obsidian.md: sestavení, manifest v kořeni, pravidla adresáře."""

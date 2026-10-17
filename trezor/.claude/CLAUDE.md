@@ -25,6 +25,11 @@ a k přesunu souborů z `_Inbox` do složek předmětů. Mazání je vždy zaká
 - Pracuj jen uvnitř trezoru. Nečti nic mimo něj a nikdy `.obsidian/plugins/*/data.json` (přihlašovací údaje pluginů).
 - Při `/zpracuj`, `/tyden` a `/zkouska` nepotřebuješ web ani obecné příkazy shellu – na přesun a výpisy používej
   `priprav.py --presun / --zmenene / --ukoly`. Nikdy nespouštěj `rm`, `find`, `curl`, `git push` apod. (jsou zakázané v `.claude/settings.json`).
+- **Skripty spouštěj vždy z kořene trezoru relativní cestou, přesně takto:** `python3 _Systém/priprav.py …`
+  (stejně `_Systém/prehledy.py`, `_Systém/predmety.py`, `_Systém/novy_ukol.py`). Nikdy absolutní cestu, `cd`, pipe (`| head`, `| grep`)
+  ani přesměrování – na takový příkaz povolení nesedí a uživatele by to zbytečně ptalo. Výstup skriptů je krátký, čti ho celý.
+- **Nic neinstaluj bez souhlasu** (`brew`, `pip`, `npm`…). Když nějaký program chybí (např. `brew install poppler` ke čtení
+  skenovaných PDF jako obrázků), vysvětli uživateli, k čemu je, a nech ho rozhodnout; příkaz ať spustí sám v Terminálu.
 - Do poznámek nikdy nezapisuj hesla, tokeny ani osobní údaje jiných lidí (spolužáků, vyučujících mimo jméno a e-mail z osnovy).
 
 ## Struktura
@@ -47,7 +52,10 @@ Kód každého předmětu je ve vlastnosti `kod` jeho přehledu `<Předmět>/<P�
 ## Šetření tokenů – DŮLEŽITÉ
 
 1. **Nikdy nečti originál, když existuje cache.** Text vždy ber z `_Systém/cache/<…>.md` podle `_Systém/fronta.json`.
-2. Originál čti jen u typu `obrázek` a u PDF označených `SKEN` – a to maximálně 5 stran najednou (parametr `pages`).
+2. Originál čti jen u typu `obrázek` bez cache a u PDF označených `SKEN` – a to maximálně 5 stran najednou (parametr `pages`).
+   `SKEN (OCR)` a obrázky s cache už mají text rozpoznaný v macOS – čti cache a originál otevři jen tam, kde text nedává smysl.
+   Pole `obrazove` ve `fronta.json` jsou slajdy/strany, kde je hlavně obrázek (graf, schéma, foto); `obrazky` jsou jejich obrázky
+   vybalené do cache. Podívej se na ně jen tehdy, když bez nich výpisky nedávají smysl.
 3. Nečti celý trezor. Na orientaci používej `ls` a vestavěné vyhledávání (Glob/Grep) – `find` a `rm` jsou zakázané, `mv` nepoužívej (místo něj `priprav.py --presun`). Seznam pojmů zjisti přes `ls _Pojmy`.
 4. Poznámku napiš jedním zápisem (Write) a znovu ji nečti.
 5. U položek `VELKÉ` udělej jen shrnutí + pojmy, ne detailní výpisky.

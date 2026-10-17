@@ -92,6 +92,7 @@ Před instalací ověří kontrolní součty všech souborů. Co přesně dělá
 | Obsidian 1.9+ | [obsidian.md](https://obsidian.md/download) | potřebuje vestavěné *Bases* |
 | Python 3 | [python.org](https://www.python.org/downloads/) nebo `brew install python` | jen standardní knihovna, nic dalšího se neinstaluje |
 | *volitelně* AI | [Claude Code](https://claude.com/claude-code) (doporučeno), nebo jiná AI v Terminálu | jen pro tlačítka s AI; bez AI funguje vše ostatní |
+| *volitelně* Poppler | `brew install poppler` | jen když má Claude Code prohlížet skenovaná PDF jako obrázky; text ve skenech a obrázcích rozpozná sám macOS (bez AI) |
 | Microsoft Word | – | pro úkoly v šabloně |
 | *volitelně* Neuro Roadmap | [GitHub](https://github.com/phenex80/obsidian-neuro-roadmap) | v Obsidianu: *Pluginy třetích stran → Procházet → Neuro Roadmap* |
 | *volitelně* Spaced Repetition | v Obsidianu: *Pluginy třetích stran → Procházet* | opakování kartiček |

@@ -2,6 +2,7 @@
 description: Týdenní přehled studia
 ---
 Vytvoř týdenní přehled podle `.claude/CLAUDE.md`. Čti co nejméně souborů.
+Skripty spouštěj přesně jak jsou uvedené (relativní cesta z kořene trezoru, bez pipe).
 
 1. `python3 _Systém/priprav.py --zmenene 7` → co se tento týden změnilo.
 2. `python3 _Systém/priprav.py --ukoly` → otevřené úkoly a jejich termíny.

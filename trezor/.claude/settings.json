@@ -3,6 +3,8 @@
     "allow": [
       "Bash(python3 _Systém/priprav.py:*)",
       "Bash(python3 _Systém/novy_ukol.py:*)",
+      "Bash(python3 _Systém/prehledy.py:*)",
+      "Bash(python3 _Systém/predmety.py:*)",
       "Bash(ls:*)",
       "Bash(date:*)"
     ],

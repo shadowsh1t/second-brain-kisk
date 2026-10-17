@@ -209,6 +209,19 @@ module.exports = class DruhyMozek extends Plugin {
   onunload() {
     clearTimeout(this.casovacFronty);
     clearTimeout(this.casovacZalohy);
+    // po vypnutí/znovunačtení rozšíření by staré upozornění zůstalo viset vedle nového
+    this.posledniUpozorneni?.hide();
+    this.posledniUpozorneni = null;
+  }
+
+  // Verze z manifest.json na disku – this.manifest si Obsidian pamatuje z prvního načtení,
+  // takže po aktualizaci bez restartu by ukazoval starou verzi
+  verze() {
+    try {
+      const v = JSON.parse(fs.readFileSync(path.join(this.zaklad, this.manifest.dir, "manifest.json"), "utf8")).version;
+      if (VERZE.test(String(v))) return String(v);
+    } catch (e) { /* záloha níže */ }
+    return this.manifest.version;
   }
 
   // ---------- Jazyk ----------
@@ -487,7 +500,7 @@ module.exports = class DruhyMozek extends Plugin {
     let obsidian = "?";
     try { obsidian = require("obsidian").apiVersion || "?"; } catch (e) { /* jen informace */ }
     const radky = [
-      `Druhý mozek: ${this.manifest.version}`, `Obsidian: ${obsidian}`, `macOS: ${os.release()} (${process.arch})`,
+      `Druhý mozek: ${this.verze()}`, `Obsidian: ${obsidian}`, `macOS: ${os.release()} (${process.arch})`,
       `Jazyk: ${n.jazyk || "cs"} / Word: ${n.jazyk_word || n.jazyk || "cs"}`, `AI: ${this.rezimAI()}`,
       `Předměty: ${this.predmety().length}`, `Neuro Roadmap: ${this.app.plugins?.manifests?.[ROADMAP_ID]?.version || "–"}`,
       `Kontrola: ${k.celkem || "–"}${(k.body || []).filter((b) => b.stav !== "ok").map((b) => ` · ${b.stav}: ${b.nazev}`).join("")}`,
@@ -639,7 +652,7 @@ module.exports = class DruhyMozek extends Plugin {
       if (r.status === 404) {  // zatím žádné vydání
         a.nejnovejsi = null; a.chyba = null;
         await this.saveData(this.data);
-        if (!automaticky) new Notice(T("✅ Máš nejnovější verzi ({0}).", this.manifest.version));
+        if (!automaticky) new Notice(T("✅ Máš nejnovější verzi ({0}).", this.verze()));
         return null;
       }
       if (r.status !== 200) throw new Error("HTTP " + r.status);
@@ -654,10 +667,10 @@ module.exports = class DruhyMozek extends Plugin {
         zip: odkazRepozitare(zip?.browser_download_url) || stranka, sha256 };
       a.chyba = null;
       await this.saveData(this.data);
-      if (novejsiVerze(a.nejnovejsi.verze, this.manifest.version)) {
+      if (novejsiVerze(a.nejnovejsi.verze, this.verze())) {
         if (!automaticky || this.odlozenaVerze !== a.nejnovejsi.verze) new AktualizaceModal(this, a.nejnovejsi).open();
       } else if (!automaticky) {
-        new Notice(T("✅ Máš nejnovější verzi ({0}).", this.manifest.version));
+        new Notice(T("✅ Máš nejnovější verzi ({0}).", this.verze()));
       }
       return a.nejnovejsi;
     } catch (e) {
@@ -1645,7 +1658,7 @@ class NastaveniTab extends PluginSettingTab {
     const a = this.plugin.data.aktualizace;
     if (DISTRIBUCE === "obsidian") {
       containerEl.createEl("p", { cls: "setting-item-description", text:
-        T("Nainstalovaná verze: {0}.", this.plugin.manifest.version) + " " +
+        T("Nainstalovaná verze: {0}.", this.plugin.verze()) + " " +
         T("Druhý mozek z adresáře Obsidianu aktualizuje Obsidian: Nastavení → Pluginy třetích stran → Zkontrolovat aktualizace.") });
       new Setting(containerEl).setName(T("Obnovit soubory v trezoru"))
         .setDesc(T("Po aktualizaci rozšíření srovná skripty, šablony a systémové poznámky s novou verzí. Upravené poznámky zůstanou."))
@@ -1654,9 +1667,9 @@ class NastaveniTab extends PluginSettingTab {
           this.display();
         }));
     }
-    const novejsi = DISTRIBUCE === "github" && a.nejnovejsi && novejsiVerze(a.nejnovejsi.verze, this.plugin.manifest.version);
+    const novejsi = DISTRIBUCE === "github" && a.nejnovejsi && novejsiVerze(a.nejnovejsi.verze, this.plugin.verze());
     containerEl.createEl("p", { cls: "setting-item-description", text:
-      T("Nainstalovaná verze: {0}.", this.plugin.manifest.version) + " " +
+      T("Nainstalovaná verze: {0}.", this.plugin.verze()) + " " +
       (a.nejnovejsi ? T("Nejnovější na GitHubu: {0}.", a.nejnovejsi.verze) : "") + " " +
       (a.posledni ? T("Zkontrolováno: {0}.", kdy(a.posledni)) : "") +
       (a.chyba ? " " + T("⚠️ Poslední pokus selhal: {0}", a.chyba) : "") });
@@ -1779,7 +1792,7 @@ class AktualizaceModal extends Modal {
     const { contentEl } = this;
     const { verze, stranka, zip } = this.nova;
     this.titleEl.setText(T("🆕 Je dostupná nová verze druhého mozku"));
-    contentEl.createEl("p", { text: T("Verze {0} (máš {1}).", verze, this.plugin.manifest.version) });
+    contentEl.createEl("p", { text: T("Verze {0} (máš {1}).", verze, this.plugin.verze()) });
     contentEl.createEl("p", { cls: "setting-item-description", text:
       T("Stáhne se z GitHubu a ověří. Pak už jen klikneš na Instalovat (nebo Zrušit instalaci). Tvoje poznámky, materiály, předměty a nastavení zůstanou; před instalací se udělá záloha a aktualizaci jde vrátit.") });
     new Setting(contentEl)
@@ -1929,7 +1942,9 @@ class HlaseniModal extends Modal {
     new Setting(contentEl).setName(T("Přiložit technické údaje")).setDesc(T("Verze, jazyk, režim AI, výsledek kontroly a poslední chyby – bez jména, UČO, cest a obsahu poznámek."))
       .addToggle((t) => t.setValue(this.priloha).onChange((v) => (this.priloha = v)));
     pole(T("Technické údaje (můžeš upravit)"), this.udaje, (v) => (this.udaje = v), 8);
-    const predmet = `[Druhý mozek ${this.plugin.manifest.version}] ` + (this.co.split("\n")[0].slice(0, 60) || T("Hlášení"));
+    contentEl.createEl("p", { cls: "setting-item-description", text:
+      T("📧 E-mail odejde z adresy nastavené v aplikaci Mail a příjemce ji uvidí. Nechceš ji prozradit? Nahlas to na GitHubu – tam je vidět jen tvoje uživatelské jméno.") });
+    const predmet = `[Druhý mozek ${this.plugin.verze()}] ` + (this.co.split("\n")[0].slice(0, 60) || T("Hlášení"));
     new Setting(contentEl)
       .addButton((b) => b.setButtonText(T("Zrušit")).onClick(() => this.close()))
       .addButton((b) => b.setButtonText(T("🐙 Nahlásit na GitHubu")).onClick(() => {

@@ -92,6 +92,7 @@
 | Obsidian 1.9+ | [obsidian.md](https://obsidian.md/download) | потрібні вбудовані *Bases* |
 | Python 3 | [python.org](https://www.python.org/downloads/) або `brew install python` | лише стандартна бібліотека, нічого більше не встановлюється |
 | *за бажання* ШІ | [Claude Code](https://claude.com/claude-code) (рекомендовано) або інший ШІ в Терміналі | лише для кнопок зі ШІ; усе інше працює без ШІ |
+| *за бажання* Poppler | `brew install poppler` | лише якщо Claude Code має переглядати скановані PDF як зображення; текст у сканах і зображеннях розпізнає сам macOS (без ШІ) |
 | Microsoft Word | – | для завдань у шаблоні |
 | *за бажання* Neuro Roadmap | [GitHub](https://github.com/phenex80/obsidian-neuro-roadmap) | в Obsidian: *Сторонні плагіни → Огляд → Neuro Roadmap* (лише англійською) |
 | *за бажання* Spaced Repetition | в Obsidian: *Сторонні плагіни → Огляд* | повторення карток |

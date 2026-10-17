@@ -20,6 +20,7 @@ import hashlib
 import html
 import json
 import plistlib
+import posixpath
 import shutil
 import time
 import re
@@ -41,24 +42,76 @@ TEXTOVE = {".pdf", ".pptx", ".docx", ".doc", ".rtf", ".txt", ".webloc"}
 OBRAZKY = {".png", ".jpg", ".jpeg", ".heic", ".webp"}
 VYNECHAT = {"_Systém", "_Pojmy", "_Přehledy", "_Zdroje", "_Archiv", "Poznámky", ".obsidian", ".claude", ".trash"}
 VELKE = 30_000  # odhad tokenů, od kterého se soubor zpracuje jen jako shrnutí
+DAVKA = 8  # položek na jedno /zpracuj (stejné číslo je v .claude/commands/zpracuj.md)
+VYSTUP = 4_000  # odhad tokenů na napsání poznámky, pojmů a kartiček k jedné položce
 MAX_CAST = 50_000_000  # max. velikost jedné rozbalené části pptx/docx (ochrana proti zip bombě)
 NASTAVENI = SYS / "nastaveni.json"
 VLASTNI_PREFIX = (json.loads(NASTAVENI.read_text())["uco"] + "-") if NASTAVENI.exists() else None
 ZAMEK = SYS / ".priprav.lock"
+CACHE_VERZE = 2  # při změně extrakce zvýšit – čekající položky se přegenerují, hotové ne
+MALO_TEXTU = 80  # znaků: slajd/strana s menším množstvím textu je „hlavně obrázek“
+OCR_ROZPOCET = 150  # s na jeden běh (Obsidian čeká na skript max. 5 min); zbytek se dočte příště
+OCR_MAX_STRAN = 60  # stran jednoho PDF
+OCR_MAX_OBRAZKU = 10  # obrázků z jedné prezentace
+OCR_MIN_VELIKOST = 20_000  # menší obrázky (loga, ikony) se nečtou
+OBRAZKY_OCR = {".png", ".jpg", ".jpeg", ".gif", ".tif", ".tiff", ".bmp", ".heic", ".webp"}
+ZACATEK = time.monotonic()
 
-PDF_JXA = """
-ObjC.import('PDFKit');
-function run(argv) {
-  const doc = $.PDFDocument.alloc.initWithURL($.NSURL.fileURLWithPath(argv[0]));
-  if (!doc || doc.isNil()) return '';
-  const out = [];
-  for (let i = 0; i < doc.pageCount; i++) {
-    const s = doc.pageAtIndex(i).string;
-    out.push('=== strana ' + (i + 1) + ' ===\\n' + (s && !s.isNil() ? ObjC.unwrap(s) : ''));
+# Text z PDF (PDFKit) a rozpoznání textu v obrázcích (macOS Vision) – lokálně, bez AI a bez internetu.
+# „pdf“: [{t: text, o: 0 bez OCR | 1 OCR | 2 došel čas | 3 nad limit stran}], „obrazky“: [text | null = došel čas]
+OCR_JXA = """
+ObjC.import('PDFKit'); ObjC.import('Vision'); ObjC.import('AppKit');
+function precti(handler, jazyky) {
+  const r = $.VNRecognizeTextRequest.alloc.init;
+  r.recognitionLevel = 0; r.usesLanguageCorrection = true;
+  try {
+    const umi = ObjC.deepUnwrap(r.supportedRecognitionLanguagesAndReturnError(null)) || [];
+    const j = jazyky.filter((l) => umi.indexOf(l) >= 0);
+    if (j.length) r.recognitionLanguages = $(j);
+  } catch (e) {}
+  if (!handler.performRequestsError($([r]), null)) return '';
+  const v = r.results, out = [];
+  for (let i = 0; i < v.count; i++) {
+    const c = v.objectAtIndex(i).topCandidates(1);
+    if (c.count) out.push(ObjC.unwrap(c.objectAtIndex(0).string));
   }
   return out.join('\\n');
 }
+function run(argv) {
+  const termin = Number(argv[1]), jazyky = argv[2] ? argv[2].split(',') : [];
+  if (argv[0] === 'obrazky') return JSON.stringify(argv.slice(3).map((p) => {
+    if (Date.now() > termin) return null;
+    try { return precti($.VNImageRequestHandler.alloc.initWithURLOptions($.NSURL.fileURLWithPath(p), $({})), jazyky); }
+    catch (e) { return ''; }
+  }));
+  const doc = $.PDFDocument.alloc.initWithURL($.NSURL.fileURLWithPath(argv[3]));
+  if (!doc || doc.isNil()) return '[]';
+  const out = [];
+  let precteno = 0;
+  for (let i = 0; i < doc.pageCount; i++) {
+    const strana = doc.pageAtIndex(i), s = strana.string;
+    let t = s && !s.isNil() ? ObjC.unwrap(s) : '', o = 0;
+    if (t.replace(/\\s/g, '').length < 30) {
+      if (precteno >= Number(argv[4])) o = 3;
+      else if (Date.now() > termin) o = 2;
+      else {
+        try {
+          const b = strana.boundsForBox(0), k = 2000 / Math.max(b.size.width, b.size.height, 1);
+          const img = strana.thumbnailOfSizeForBox($.NSMakeSize(b.size.width * k, b.size.height * k), 0);
+          const png = $.NSBitmapImageRep.imageRepWithData(img.TIFFRepresentation)
+            .representationUsingTypeProperties($.NSBitmapImageFileTypePNG, $({}));
+          t = precti($.VNImageRequestHandler.alloc.initWithDataOptions(png, $({})), jazyky);
+          o = 1; precteno++;
+        } catch (e) { o = 0; }
+      }
+    }
+    out.push({ t: t, o: o });
+  }
+  return JSON.stringify(out);
+}
 """
+OCR_JAZYKY = {"cs": ["cs-CZ", "sk-SK", "en-US", "uk-UA"], "sk": ["sk-SK", "cs-CZ", "en-US", "uk-UA"],
+              "en": ["en-US", "cs-CZ", "sk-SK", "uk-UA"], "uk": ["uk-UA", "en-US", "cs-CZ", "sk-SK"]}
 
 
 def nfc(s):
@@ -94,45 +147,254 @@ def xml_odstavce(xml, odstavec, text_tag):
     return vysledek
 
 
-def z_pptx(cesta):
-    bloky = []
+def vztahy(z, cast):
+    """Vztahy části (rels): {Id: (typ, cesta v ZIPu nebo URL, externí?)}."""
+    adresar, jmeno = posixpath.split(cast)
+    rels = f"{adresar}/_rels/{jmeno}.rels"
+    if rels not in z.namelist():
+        return {}
+    vysledek = {}
+    for atributy in re.findall(r"<Relationship\b([^>]*)>", precti_cast(z, rels)):
+        a = dict(re.findall(r'(\w+)="([^"]*)"', atributy))
+        cil = html.unescape(a.get("Target", ""))
+        externi = a.get("TargetMode") == "External"
+        if not externi:
+            cil = cil.lstrip("/") if cil.startswith("/") else posixpath.normpath(posixpath.join(adresar, cil))
+        vysledek[a.get("Id")] = (a.get("Type", "").rsplit("/", 1)[-1], cil, externi)
+    return vysledek
+
+
+def odkazy(rel):
+    """Řádek s webovými odkazy (bez duplicit, jen http/https/mailto – ne cesty k souborům)."""
+    urls = list(dict.fromkeys(c for t, c, ext in rel.values()
+                              if ext and t == "hyperlink" and re.match(r"(https?:|mailto:)", c, re.I)))
+    return ["[odkazy] " + " · ".join(urls)] if urls else []
+
+
+def tabulka_md(radky):
+    """Seznam řádků (seznamů buněk) → tabulka v Markdownu; první řádek je záhlaví."""
+    radky = [[re.sub(r"\s+", " ", b).strip().replace("|", "\\|") for b in r] for r in radky]
+    radky = [r for r in radky if any(r)]
+    if not radky:
+        return ""
+    sloupcu = max(len(r) for r in radky)
+    radky = [r + [""] * (sloupcu - len(r)) for r in radky]
+    md = ["| " + " | ".join(radky[0]) + " |", "|" + "---|" * sloupcu]
+    return "\n".join(md + ["| " + " | ".join(r) + " |" for r in radky[1:]])
+
+
+def pptx_tabulky(xml):
+    tabulky = []
+    for tbl in re.findall(r"<a:tbl\b[^>]*>(.*?)</a:tbl>", xml, re.S):
+        radky = [[" ".join(xml_odstavce(tc, "a:p", "a:t")) for tc in re.findall(r"<a:tc\b[^>]*>(.*?)</a:tc>", tr, re.S)]
+                 for tr in re.findall(r"<a:tr\b[^>]*>(.*?)</a:tr>", tbl, re.S)]
+        tabulky.append(tabulka_md(radky))
+    return [t for t in tabulky if t]
+
+
+def docx_kusy(xml):
+    """Rozdělí tělo dokumentu na text a tabulky v pořadí dokumentu (vnořené tabulky zůstanou v buňce)."""
+    hloubka, zacatek, posledni = 0, 0, 0
+    for m in re.finditer(r"<(/?)w:tbl(?=[ >])[^>]*>", xml):
+        if not m.group(1):
+            if hloubka == 0:
+                zacatek = m.start()
+            hloubka += 1
+        elif hloubka:
+            hloubka -= 1
+            if hloubka == 0:
+                yield xml[posledni:zacatek], False
+                yield xml[zacatek:m.end()], True
+                posledni = m.end()
+    yield xml[posledni:], False
+
+
+def docx_tabulka(xml):
+    radky, radek, hloubka, bunka = [], None, 0, 0
+    for m in re.finditer(r"<(/?)w:(tbl|tr|tc)(?=[ >])[^>]*>", xml):
+        konec, tag = m.group(1), m.group(2)
+        if tag == "tbl":
+            hloubka += -1 if konec else 1
+        elif hloubka != 1:
+            continue  # řádky a buňky vnořené tabulky
+        elif tag == "tr":
+            if konec and radek is not None:
+                radky.append(radek)
+            radek = None if konec else []
+        elif not konec:
+            bunka = m.end()
+        elif radek is not None:
+            obsah = xml[bunka:m.start()]
+            vlastnosti = re.match(r"\s*<w:tcPr>(.*?)</w:tcPr>", obsah, re.S)
+            text = [html.unescape("".join(re.findall(r"<w:t(?: [^>]*)?>([^<]*)</w:t>", p))).strip() for p in obsah.split("</w:p>")]
+            radek.append(" ".join(t for t in text if t))
+            span = re.search(r'<w:gridSpan w:val="(\d+)"', vlastnosti.group(1)) if vlastnosti else None
+            radek += [""] * (min(int(span.group(1)), 50) - 1 if span else 0)
+    return tabulka_md(radky)
+
+
+def graf(z, cast):
+    """Data grafu (ppt/charts, word/charts) z uložené cache hodnot → tabulka."""
+    if cast not in z.namelist():
+        return []
+    xml = precti_cast(z, cast)
+    nazev = re.search(r"<c:title>(.*?)</c:title>", xml.split("<c:plotArea", 1)[0], re.S)
+    nazev = " ".join(xml_odstavce(nazev.group(1), "a:p", "a:t")) if nazev else ""
+    body = lambda x: {int(i): html.unescape(v) for i, v in re.findall(r'<c:pt idx="(\d+)"[^>]*>\s*<c:v>([^<]*)</c:v>', x or "")}
+    rady = []
+    for ser in re.findall(r"<c:ser>(.*?)</c:ser>", xml, re.S):
+        tx = re.search(r"<c:tx>(.*?)</c:tx>", ser, re.S)
+        jmeno = (" ".join(re.findall(r"<c:v>([^<]*)</c:v>", tx.group(1))) or " ".join(xml_odstavce(tx.group(1), "a:p", "a:t"))) if tx else ""
+        kat = re.search(r"<c:(cat|xVal)>(.*?)</c:\1>", ser, re.S)
+        hod = re.search(r"<c:(val|yVal)>(.*?)</c:\1>", ser, re.S)
+        rady.append((html.unescape(jmeno) or f"řada {len(rady) + 1}", body(kat and kat.group(2)), body(hod and hod.group(2))))
+    if not rady:
+        return []
+    kategorie = {}
+    for _, kat, _ in rady:
+        for i, v in kat.items():
+            kategorie.setdefault(i, v)
+    indexy = sorted(set(kategorie) | {i for _, _, hod in rady for i in hod})[:200]
+    tabulka = [[""] + [r[0] for r in rady]] + [[kategorie.get(i, str(i + 1))] + [r[2].get(i, "") for r in rady] for i in indexy]
+    return [f"[graf: {nazev}]" if nazev else "[graf]", tabulka_md(tabulka)]
+
+
+def z_pptx(cesta, info, slozka):
+    bloky, kandidati = [], []
     with zipfile.ZipFile(cesta) as z:
+        jmena = set(z.namelist())
         slajdy = sorted(
-            (n for n in z.namelist() if re.fullmatch(r"ppt/slides/slide\d+\.xml", n)),
+            (n for n in jmena if re.fullmatch(r"ppt/slides/slide\d+\.xml", n)),
             key=lambda n: int(re.search(r"(\d+)", n.rsplit("/", 1)[1]).group(1)),
         )
         for i, n in enumerate(slajdy, 1):
-            radky = xml_odstavce(precti_cast(z, n), "a:p", "a:t")
-            rels = n.replace("slides/", "slides/_rels/") + ".rels"
-            if rels in z.namelist():
-                m = re.search(r'Target="\.\./notesSlides/(notesSlide\d+\.xml)"', precti_cast(z, rels))
-                if m:
-                    pozn = xml_odstavce(precti_cast(z, "ppt/notesSlides/" + m.group(1)), "a:p", "a:t")
-                    pozn = [r for r in pozn if not r.isdigit()]
+            xml = precti_cast(z, n)
+            rel = vztahy(z, n)
+            nadpis = ""
+            for m in re.finditer(r"<p:sp(?:\s[^>]*)?>.*?</p:sp>", xml, re.S):
+                if re.search(r'<p:ph\b[^>]*type="(?:title|ctrTitle)"', m.group(0)):
+                    nadpis = " ".join(xml_odstavce(m.group(0), "a:p", "a:t"))
+                    xml = xml[:m.start()] + xml[m.end():]
+                    break
+            radky = xml_odstavce(re.sub(r"<a:tbl\b.*?</a:tbl>", "", xml, flags=re.S), "a:p", "a:t")
+            textu = len("".join(radky))
+            radky += pptx_tabulky(xml)
+            for rid in re.findall(r'<dgm:relIds\b[^>]*\br:dm="([^"]+)"', xml):  # SmartArt
+                if rid in rel and rel[rid][1] in jmena:
+                    radky += xml_odstavce(precti_cast(z, rel[rid][1]), "a:p", "a:t")
+            for rid in re.findall(r'<c:chart\b[^>]*\br:id="([^"]+)"', xml):
+                if rid in rel:
+                    radky += graf(z, rel[rid][1])
+            for typ, cil, _ in rel.values():
+                if typ == "notesSlide" and cil in jmena:
+                    pozn = [r for r in xml_odstavce(precti_cast(z, cil), "a:p", "a:t") if not r.isdigit()]
                     if pozn:
-                        radky += ["[poznámky řečníka] " + " ".join(pozn)]
-            bloky.append(f"=== slajd {i} ===\n" + "\n".join(radky))
+                        radky += ["[poznámky řečníka]"] + pozn
+            radky += odkazy(rel)
+            if "<p:pic" in xml and textu < MALO_TEXTU:
+                info["obrazove"].append(i)
+                for rid in re.findall(r'<a:blip\b[^>]*\br:embed="([^"]+)"', xml):
+                    cil = rel.get(rid, ("", "", True))[1]
+                    if cil in jmena and posixpath.splitext(cil)[1].lower() in OBRAZKY_OCR \
+                            and OCR_MIN_VELIKOST <= z.getinfo(cil).file_size <= MAX_CAST:
+                        kandidati.append((len(bloky), i, cil))
+            hlava = f"=== slajd {i}: {nadpis} ===" if nadpis else f"=== slajd {i} ==="
+            bloky.append(hlava + "\n" + "\n".join(radky))
+        # obrázky slajdů „hlavně obrázek“ vybalit do cache (AI se na ně může podívat) a přečíst z nich text
+        vybrane, videne = [], set()
+        for b, i, cil in kandidati:
+            if cil not in videne and len(vybrane) < OCR_MAX_OBRAZKU:
+                videne.add(cil)
+                slozka.mkdir(parents=True, exist_ok=True)
+                soubor = slozka / f"slajd{i}-{len(vybrane) + 1}{posixpath.splitext(cil)[1].lower()}"
+                soubor.write_bytes(z.read(cil))
+                vybrane.append((b, soubor))
+    for (b, soubor), text in zip(vybrane, ocr_obrazku([s for _, s in vybrane])):
+        info["obrazky"].append(soubor)
+        if text is None:
+            info["odlozeno"] = True
+        elif len(re.sub(r"\s", "", text)) >= 10:
+            bloky[b] += "\n[text z obrázku]\n" + text
+            info["ocr"] += 1
     return bloky
 
 
-def z_docx(cesta):
+def z_docx(cesta, info, slozka):
     with zipfile.ZipFile(cesta) as z:
         xml = precti_cast(z, "word/document.xml")
+        rel = vztahy(z, "word/document.xml")
+        grafy = [r for rid in re.findall(r'<c:chart\b[^>]*\br:id="([^"]+)"', xml) if rid in rel for r in graf(z, rel[rid][1])]
     radky = []
-    for p in xml.split("</w:p>"):
-        text = html.unescape("".join(re.findall(r"<w:t(?: [^>]*)?>([^<]*)</w:t>", p))).strip()
-        if not text:
+    for kus, je_tabulka in docx_kusy(xml):
+        if je_tabulka:
+            radky.append(docx_tabulka(kus))
             continue
-        styl = re.search(r'<w:pStyle w:val="(?:Heading|Nadpis)(\d)"', p)
-        radky.append(("#" * int(styl.group(1)) + " " if styl else "") + text)
-    return ["\n".join(radky)]
+        for p in kus.split("</w:p>"):
+            text = html.unescape("".join(re.findall(r"<w:t(?: [^>]*)?>([^<]*)</w:t>", p))).strip()
+            if not text:
+                continue
+            styl = re.search(r'<w:pStyle w:val="(?:Heading|Nadpis)(\d)"', p)
+            radky.append(("#" * int(styl.group(1)) + " " if styl else "") + text)
+    return ["\n".join([r for r in radky if r] + grafy + odkazy(rel))]
 
 
-def z_pdf(cesta):
-    r = subprocess.run(["osascript", "-l", "JavaScript", "-e", PDF_JXA, str(cesta)],
-                       capture_output=True, text=True, timeout=300)
-    text = r.stdout.strip()
-    return [b for b in re.split(r"(?==== strana \d+ ===)", text) if b.strip()]
+def zbyva_ocr():
+    return OCR_ROZPOCET - (time.monotonic() - ZACATEK)
+
+
+def ocr_zapnuto():
+    return sys.platform == "darwin" and nastaveni().get("ocr", True) is not False
+
+
+def ocr_jazyky():
+    return ",".join(OCR_JAZYKY.get(nastaveni().get("jazyk"), OCR_JAZYKY["cs"]))
+
+
+def osascript(argumenty, cas):
+    r = subprocess.run(["osascript", "-l", "JavaScript", "-e", OCR_JXA, *argumenty],
+                       capture_output=True, text=True, encoding="utf8", timeout=cas)
+    return json.loads(r.stdout) if r.returncode == 0 and r.stdout.strip() else None
+
+
+def ocr_obrazku(cesty):
+    """Text z obrázků přes macOS Vision – pro každý text, "" (nic/OCR nejde) nebo None (došel čas, zkusí se příště)."""
+    if not cesty or not ocr_zapnuto():
+        return [""] * len(cesty)
+    zbyva = zbyva_ocr()
+    if zbyva < 5:
+        return [None] * len(cesty)
+    try:
+        v = osascript(["obrazky", str(int((time.time() + zbyva) * 1000)), ocr_jazyky(), *map(str, cesty)], zbyva + 60)
+    except subprocess.TimeoutExpired:
+        return [None] * len(cesty)
+    except (ValueError, OSError):
+        v = None
+    return v if isinstance(v, list) and len(v) == len(cesty) else [""] * len(cesty)
+
+
+def z_pdf(cesta, info, slozka):
+    zbyva = max(zbyva_ocr(), 0) if ocr_zapnuto() else 0
+    strany = osascript(["pdf", str(int((time.time() + zbyva) * 1000) if zbyva >= 5 else 0), ocr_jazyky(),
+                        str(cesta), str(OCR_MAX_STRAN)], 300 + zbyva) or []
+    bloky = []
+    for i, s in enumerate(strany, 1):
+        text = (s.get("t") or "").strip()
+        info["ocr"] += s.get("o") == 1
+        info["odlozeno"] |= s.get("o") == 2 and ocr_zapnuto()
+        if len(re.sub(r"\s", "", text)) < MALO_TEXTU and s.get("o") != 2:
+            info["obrazove"].append(i)
+        bloky.append(f"=== strana {i} ===\n{text}")
+    return bloky
+
+
+def z_obrazek(cesta, info, slozka):
+    text = ocr_obrazku([cesta])[0]
+    if text is None:
+        info["odlozeno"] = True
+    elif len(re.sub(r"\s", "", text)) >= 10:
+        info["ocr"] = 1
+        return [text]
+    return []
 
 
 def z_textutil(cesta):
@@ -150,7 +412,9 @@ def vycisti(bloky):
     """Odstraní opakující se zápatí/záhlaví a prázdné řádky – to nejvíc šetří."""
     pocty = Counter(r.strip() for b in bloky for r in set(b.splitlines()[1:]) if r.strip())
     hranice = max(3, len(bloky) * 0.3)
-    opakovane = {r for r, n in pocty.items() if n >= hranice and len(bloky) >= 4}
+    # řádky tabulek a značky jako [poznámky řečníka] se opakují záměrně
+    opakovane = {r for r, n in pocty.items() if n >= hranice and len(bloky) >= 4
+                 and not r.startswith("|") and not re.fullmatch(r"\[[^\]]+\]", r)}
     ciste = []
     for b in bloky:
         radky = b.splitlines()
@@ -162,17 +426,27 @@ def vycisti(bloky):
     return "\n\n".join(ciste), len(opakovane)
 
 
-def extrahuj(cesta):
+def extrahuj(cesta, info, slozka):
+    """Vrátí (bloky, typ); do info doplní počet stran/obrázků s OCR, slajdy/strany „hlavně obrázek“ a vybalené obrázky."""
     pripona = cesta.suffix.lower()
     if pripona == ".pptx":
-        return z_pptx(cesta), "prezentace"
+        return z_pptx(cesta, info, slozka), "prezentace"
     if pripona == ".docx":
-        return z_docx(cesta), "dokument"
+        return z_docx(cesta, info, slozka), "dokument"
     if pripona == ".pdf":
-        return z_pdf(cesta), "pdf"
+        return z_pdf(cesta, info, slozka), "pdf"
+    if pripona in OBRAZKY:
+        return z_obrazek(cesta, info, slozka), "obrázek"
     if pripona == ".webloc":
         return z_webloc(cesta), "odkaz"
     return z_textutil(cesta), "text"
+
+
+def nastaveni():
+    try:
+        return json.loads(NASTAVENI.read_text())
+    except Exception:
+        return {}
 
 
 def texty():
@@ -251,37 +525,54 @@ def prehled():
             continue
         videne[h] = rel
 
-        pripona = p.suffix.lower()
         polozka = {"soubor": rel, "predmet": rel.split("/")[0], "velikost_mb": round(p.stat().st_size / 1e6, 1)}
-        if pripona in OBRAZKY:
+        cil, slozka = CACHE / f"{h[:16]}.md", CACHE / h[:16]
+        hlava = cil.read_text().split("\n", 1)[0] if cil.exists() else ""
+        verze = re.search(r"\| cache: (\d+)", hlava)
+        # cache starší verze nebo s nedočteným OCR (došel čas) se vytvoří znovu
+        if not verze or int(verze.group(1)) != CACHE_VERZE or "ocr_odlozeno" in hlava:
+            shutil.rmtree(slozka, ignore_errors=True)
+            info = {"ocr": 0, "odlozeno": False, "obrazove": [], "obrazky": []}
+            try:
+                bloky, typ = extrahuj(p, info, slozka)
+            except Exception as e:  # poškozený nebo zamčený soubor
+                bloky, typ = [], "chyba: " + re.sub(r"[\s|]+", " ", str(e))[:200]
+            text, odstraneno = vycisti(bloky)
+            cil.write_text(f"<!-- zdroj: {rel} | typ: {typ} | bloků: {len(bloky)} | "
+                           f"odstraněno opakujících se řádků: {odstraneno} | cache: {CACHE_VERZE} | ocr: {info['ocr']} | "
+                           f"obrazove: {','.join(map(str, info['obrazove']))}"
+                           + (" | ocr_odlozeno: 1" if info["odlozeno"] else "") + f" -->\n\n{text}\n")
+        text = cil.read_text()
+        hlava = text.split("\n", 1)[0]
+        typ = re.search(r"typ: ([^|]+)", hlava).group(1).strip()
+        bloku = int(re.search(r"bloků: (\d+)", hlava).group(1))
+        ocr = int(re.search(r"\| ocr: (\d+)", hlava).group(1))
+        obrazove = [int(x) for x in re.search(r"\| obrazove: ([\d,]*)", hlava).group(1).split(",") if x]
+        t = tokeny(text)
+        if p.suffix.lower() in OBRAZKY and not ocr:
             polozka.update(typ="obrázek", tokeny=1600, slova=0, cache=None, poznamka="AI přečte obrázek přímo")
             uspora_puvodni += 1600
             uspora_cista += 1600
         else:
-            cil = CACHE / f"{h[:16]}.md"
-            if not cil.exists():
-                try:
-                    bloky, typ = extrahuj(p)
-                except Exception as e:  # poškozený nebo zamčený soubor
-                    bloky, typ = [], f"chyba: {e}"
-                text, odstraneno = vycisti(bloky)
-                cil.write_text(f"<!-- zdroj: {rel} | typ: {typ} | bloků: {len(bloky)} | "
-                               f"odstraněno opakujících se řádků: {odstraneno} -->\n\n{text}\n")
-            text = cil.read_text()
-            hlava = text.split("\n", 1)[0]
-            typ = re.search(r"typ: ([^|]+)", hlava).group(1).strip()
-            bloku = int(re.search(r"bloků: (\d+)", hlava).group(1))
-            t = tokeny(text)
             poznamka = ""
-            if typ == "pdf" and bloku and len(text) / bloku < 80:
+            if typ == "obrázek":
+                poznamka = "OCR – text z obrázku rozpoznán v macOS, originál otevřít jen u grafu nebo schématu"
+            elif typ == "pdf" and bloku and len(text) / bloku < 80:
                 poznamka = "SKEN – text chybí, číst obrazem jen vybrané strany"
             elif t > VELKE:
                 poznamka = "VELKÉ – zpracovat jen jako shrnutí"
+            elif typ == "pdf" and ocr:
+                poznamka = "SKEN (OCR) – text rozpoznán v macOS, originál otevřít jen u nejasných stran"
             # odhad, kolik by stálo čtení originálu (PDF/prezentace AI čte i jako obrázky)
-            puvodni = t + (bloku * 1500 if typ in ("pdf", "prezentace") else 0)
+            puvodni = 1600 if typ == "obrázek" else t + (bloku * 1500 if typ in ("pdf", "prezentace") else 0)
             uspora_puvodni += puvodni
             uspora_cista += t
             polozka.update(typ=typ, tokeny=t, slova=len(text.split()), cache=str(cil.relative_to(TREZOR)), poznamka=poznamka)
+            if obrazove:
+                polozka["obrazove"] = obrazove[:50]
+            if slozka.is_dir():
+                polozka["obrazky"] = sorted((nfc(str(x.relative_to(TREZOR))) for x in slozka.iterdir()),
+                                            key=lambda x: [int(c) if c.isdigit() else c for c in re.split(r"(\d+)", x)])
         reg[rel] = {"otisk": h, "stav": "ceka", "datum": date.today().isoformat(), **podpis(p)}
         fronta.append(polozka)
 
@@ -302,8 +593,12 @@ def prehled():
     except Exception:
         bez_ai = False
     minuty = lambda f: max(1, round(f.get("slova", 0) / 200))
+    # /zpracuj vezme najednou DAVKA položek; k přečtení se přičte i psaní poznámek a pojmů (VYSTUP na položku)
+    davek = -(-len(fronta) // DAVKA)
+    odhad_celkem = sum(f["tokeny"] for f in fronta) + len(fronta) * VYSTUP
     # poznámky ve fronta.json zůstávají česky (čte je AI), do Fronta.md jdou v jazyce uživatele
-    pozn_preklad = {"SKEN": T["pozn_sken"], "VELKÉ": T["pozn_velke"], "AI přečte": T["pozn_obrazek"]}
+    pozn_preklad = {"SKEN (OCR)": T["pozn_sken_ocr"], "SKEN": T["pozn_sken"], "VELKÉ": T["pozn_velke"],
+                    "AI přečte": T["pozn_obrazek"], "OCR": T["pozn_ocr"]}
     preloz = lambda text: next((v for k, v in pozn_preklad.items() if text.startswith(k)), text)
     radky = [
         f"# {T['fronta_nadpis']}", "",
@@ -311,6 +606,8 @@ def prehled():
         (T["ceka_rucne"].format(n=len(fronta), m=sum(minuty(f) for f in fronta)) if bez_ai
          else T["ceka"].format(n=len(fronta), t=cislo(sum(f["tokeny"] for f in fronta)))) if fronta else T["nic_neceka"],
         "",
+        *([T["davky"].format(d=davek, t=cislo(odhad_celkem)), ""] if fronta and not bez_ai else []),
+        *([T["rada_sezeni"], ""] if davek > 1 and not bez_ai else []),
         f'<progress value="{vyrizeno}" max="{max(celkem, 1)}"></progress> ' + T["zpracovano"].format(a=vyrizeno, b=celkem),
         "",
         f"## {T['seznam']}",
@@ -321,7 +618,7 @@ def prehled():
         for f in fronta:
             typ = T.get("typ_" + f["typ"], f["typ"])
             mnozstvi = T["minuty"].format(n=minuty(f)) if bez_ai else cislo(f["tokeny"])
-            pozn = "" if bez_ai and f["poznamka"].startswith(("VELKÉ", "AI přečte")) else preloz(f["poznamka"])
+            pozn = "" if bez_ai and f["poznamka"].startswith(("VELKÉ", "AI přečte", "OCR", "SKEN (OCR)")) else preloz(f["poznamka"])
             radky.append(f"| {Path(f['soubor']).name.replace('|', '/')} | {f['predmet']} | {typ} | {mnozstvi} | {pozn} |")
     FRONTA.write_text("\n".join(radky) + "\n")
     (SYS / "fronta.json").write_text(json.dumps(fronta, ensure_ascii=False, indent=1))
@@ -329,6 +626,8 @@ def prehled():
     print(T["ve_fronte"].format(n=len(fronta), h=stavy["hotovo"], p=stavy["preskoceno"], d=stavy["duplicita"]))
     if fronta:
         print(T["odhad"].format(a=cislo(uspora_cista), b=cislo(uspora_puvodni)))
+        if not bez_ai:
+            print(T["davky"].replace("**", "").replace("`", "").format(d=davek, t=cislo(odhad_celkem)))
         for f in fronta:
             print(f"  - [{f['typ']}] {f['soubor']} (~{f['tokeny']} tok.) {f['poznamka']}")
 

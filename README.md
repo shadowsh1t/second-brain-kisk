@@ -92,6 +92,7 @@ Before installing it verifies the checksums of all files. What exactly it does i
 | Obsidian 1.9+ | [obsidian.md](https://obsidian.md/download) | needs the built-in *Bases* |
 | Python 3 | [python.org](https://www.python.org/downloads/) or `brew install python` | standard library only, nothing else is installed |
 | *optional* AI | [Claude Code](https://claude.com/claude-code) (recommended), or another AI in Terminal | only for AI buttons; everything else works without AI |
+| *optional* Poppler | `brew install poppler` | only if Claude Code should look at scanned PDFs as images; text in scans and pictures is recognised by macOS itself (no AI) |
 | Microsoft Word | – | for assignments in the template |
 | *optional* Neuro Roadmap | [GitHub](https://github.com/phenex80/obsidian-neuro-roadmap) | in Obsidian: *Community plugins → Browse → Neuro Roadmap* (English only) |
 | *optional* Spaced Repetition | in Obsidian: *Community plugins → Browse* | flashcard review |
