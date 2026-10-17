@@ -6,7 +6,7 @@
   python3 _Systém/predmety.py --seznam    # vypíše předměty (JSON)
 
 Předmět = složka v kořeni trezoru s přehledem <Název>/<Název>.md (typ: predmet). Nic se nemaže ani nepřepisuje –
-existující předmět se přeskočí. Odebrání (přesun do koše) se dělá v Obsidianu (Nastavení → Druhý mozek → Předměty).
+existující předmět se přeskočí. Odebrání (přesun do koše) se dělá v Obsidianu (Nastavení → Second Brain for KISK → Předměty).
 """
 import argparse
 import datetime

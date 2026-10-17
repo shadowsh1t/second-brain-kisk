@@ -3,9 +3,14 @@
 All notable changes to Second Brain for KISK. The newest version is at the top.
 When a new version is released, Obsidian offers it under **🆕 A new version of Second Brain is available** with a link to this list.
 
+## 1.0.2 – 2026-10-17
+
+- The plugin is now called **Second Brain for KISK** in Obsidian (the directory only allows names without diacritics); settings are under *Settings → Second Brain for KISK*.
+- Updates keep the Inbox, Concepts and Overviews hub notes untouched (you drop files there), and always refresh the dashboard tables (Obsidian reformats them itself) – no more “(new version)” copies of them.
+
 ## 1.0.1 – 2026-10-17
 
-- **Available in the Obsidian plugin directory** – install *Druhý mozek* in Obsidian (Settings → Community plugins → Browse). On first start a setup guide asks for language, name, UČO, courses and AI mode and creates Home, the guide, templates and scripts in your vault. The directory version is updated by Obsidian; after an update it offers to refresh the files in your vault (edited notes stay).
+- **Available in the Obsidian plugin directory** – install *Second Brain for KISK* in Obsidian (Settings → Community plugins → Browse). On first start a setup guide asks for language, name, UČO, courses and AI mode and creates Home, the guide, templates and scripts in your vault. The directory version is updated by Obsidian; after an update it offers to refresh the files in your vault (edited notes stay).
 - The GitHub installer and one-click updates keep working as before.
 - Settings and dialogs follow Obsidian's plugin guidelines (headings, no inline styles).
 - Guide: what to do when Claude Code asks you to `/login` again.
@@ -14,7 +19,7 @@ When a new version is released, Obsidian offers it under **🆕 A new version of
 
 First public release.
 
-- **Obsidian plugin “Druhý mozek”** – buttons on Home, system check with alerts, integrity guard for code and AI rules, automatic backup (OneDrive, Google Drive, Dropbox, iCloud, external drive or any folder).
+- **Obsidian plugin “Second Brain for KISK”** – buttons on Home, system check with alerts, integrity guard for code and AI rules, automatic backup (OneDrive, Google Drive, Dropbox, iCloud, external drive or any folder).
 - **AI processing of course materials** – notes, mind maps and flashcards via Claude Code, another AI in Terminal, or everything by hand; local token saver.
 - **Word assignments** in the MUNI ARTS style, and conversion of finished work into the template.
 - **Courses** – enter as many as you have during installation, add or remove them later in Obsidian (removing moves the folder to the macOS Trash after confirmation).

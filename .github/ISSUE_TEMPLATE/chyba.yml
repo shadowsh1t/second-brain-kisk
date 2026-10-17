@@ -28,7 +28,7 @@ body:
     id: verze
     attributes:
       label: Verze druhého mozku · Second Brain version
-      description: Nastavení → Druhý mozek → Aktualizace · Settings → Druhý mozek → Updates
+      description: Nastavení → Second Brain for KISK → Aktualizace · Settings → Second Brain for KISK → Updates
       placeholder: "1.0.0"
   - type: dropdown
     id: ai

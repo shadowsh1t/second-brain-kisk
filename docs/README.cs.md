@@ -40,7 +40,7 @@ Podrobný návod k používání: **[trezor/01 Návod.md](../trezor/01%20N%C3%A1
 
 ## 🤖 S AI, s jinou AI, nebo úplně bez AI
 
-Vybereš si při instalaci a kdykoli změníš v Obsidianu (*Nastavení → Druhý mozek*):
+Vybereš si při instalaci a kdykoli změníš v Obsidianu (*Nastavení → Second Brain for KISK*):
 
 | Režim | Co potřebuješ | Poznámka |
 |---|---|---|
@@ -53,7 +53,7 @@ Tipy ke každému režimu (ruční práce, lokální modely, webové AI) jsou v 
 
 ## 🧩 Instalace přímo z Obsidianu
 
-1. V Obsidianu: **Nastavení → Pluginy třetích stran → Procházet**, najdi **Druhý mozek**, klikni **Instalovat** a **Zapnout**.
+1. V Obsidianu: **Nastavení → Pluginy třetích stran → Procházet**, najdi **Second Brain for KISK**, klikni **Instalovat** a **Zapnout**.
 2. Otevře se průvodce: jazyk, jazyk dokumentů ve Wordu, jméno, UČO, tvoje předměty a režim AI. Zkontroluje, že máš Python 3 (když ne, ukáže, kde ho stáhnout).
 3. Klikni **🧠 Nastavit** – v trezoru vznikne Domov, Návod, šablony, předměty a skripty. Nic existujícího se nepřepíše.
 
@@ -82,7 +82,7 @@ Před instalací ověří kontrolní součty všech souborů. Co přesně dělá
 2. **⬇️ Stáhnout a nainstalovat** – rozšíření stáhne balík z Releases tohoto repozitáře a ověří ho: kontrolní součet ZIPu zveřejněný u vydání, kontrolní součty všech souborů (`SHA256SUMS.txt`) a číslo verze. Do té doby se v trezoru nic nemění a **Zrušit instalaci** vše zastaví.
 3. **✅ Instalovat** – udělá se záloha trezoru, vymění se kód systému a rozšíření se znovu načte.
 
-**Poznámky, materiály, předměty, nastavení a tvoje CSS předmětů zůstanou.** Systémové poznámky, které sis upravil (Domov, Návod, šablony, pravidla AI), se nepřepíšou – nová verze se uloží vedle s příponou „(nová verze)“. Když se instalace uprostřed pokazí, všechny změny se samy vrátí. Pro případ nouze je 7 dní k dispozici **↩️ Vrátit poslední aktualizaci** v *Nastavení → Druhý mozek → Aktualizace*; pak jde dočasná záloha z aktualizace (skrytá složka `.druhy-mozek-zaloha`) do koše. Klik na Instalovat potvrdí 🛡 jen u souborů shodných s ověřeným balíkem. Jde to i ručně: stáhni ZIP a spusť `Instalovat.command` → *Aktualizovat existující trezor*. Kontrolu jde vypnout v *Nastavení → Druhý mozek → Aktualizace*.
+**Poznámky, materiály, předměty, nastavení a tvoje CSS předmětů zůstanou.** Systémové poznámky, které sis upravil (Domov, Návod, šablony, pravidla AI), se nepřepíšou – nová verze se uloží vedle s příponou „(nová verze)“. Když se instalace uprostřed pokazí, všechny změny se samy vrátí. Pro případ nouze je 7 dní k dispozici **↩️ Vrátit poslední aktualizaci** v *Nastavení → Second Brain for KISK → Aktualizace*; pak jde dočasná záloha z aktualizace (skrytá složka `.druhy-mozek-zaloha`) do koše. Klik na Instalovat potvrdí 🛡 jen u souborů shodných s ověřeným balíkem. Jde to i ručně: stáhni ZIP a spusť `Instalovat.command` → *Aktualizovat existující trezor*. Kontrolu jde vypnout v *Nastavení → Second Brain for KISK → Aktualizace*.
 
 ## Požadavky
 
@@ -102,7 +102,7 @@ Před instalací ověří kontrolní součty všech souborů. Co přesně dělá
 2. **Zkopíruj obsah složky `trezor/`** do svého trezoru Obsidianu (nebo složku rovnou otevři: *Obsidian → Otevřít složku jako trezor*).
    Složky `.obsidian` a `.claude` jsou skryté – ve Finderu je zobrazíš zkratkou **Cmd+Shift+.** (tečka).
 3. **Osobní údaje:** v `_Systém/` přejmenuj `nastaveni.priklad.json` na `nastaveni.json` a vyplň jméno a UČO
-   (`jazyk` a `jazyk_word`: `cs`, `sk`, `en` nebo `uk`). Pro jiný jazyk než češtinu pak v Obsidianu zvol jazyk v *Nastavení → Druhý mozek*
+   (`jazyk` a `jazyk_word`: `cs`, `sk`, `en` nebo `uk`). Pro jiný jazyk než češtinu pak v Obsidianu zvol jazyk v *Nastavení → Second Brain for KISK*
    – rozšíření přepíše systémové poznámky (Domov, Návod, šablony) do zvoleného jazyka.
 4. **Logo (volitelné):** ulož logo své fakulty jako `_Systém/Word/logo-muni-arts.png` (PNG, průhledné pozadí).
    Logo MU v repozitáři není, protože je ochrannou známkou. Bez loga má záhlaví jen text.
@@ -111,9 +111,9 @@ Před instalací ověří kontrolní součty všech souborů. Co přesně dělá
    python3 _Systém/Word/vytvor_sablonu.py
    python3 _Systém/priprav.py
    ```
-6. **Zapni rozšíření:** *Obsidian → Nastavení → Pluginy třetích stran → Zapnout* a povol **Druhý mozek**.
+6. **Zapni rozšíření:** *Obsidian → Nastavení → Pluginy třetích stran → Zapnout* a povol **Second Brain for KISK**.
    *Nastavení → Vzhled → CSS úryvky* → zapni **druhy-mozek**.
-7. **Předměty:** v Obsidianu přidej každý svůj předmět tlačítkem **📚 Přidat předmět** (kód + název); ukázkový předmět odebereš v *Nastavení → Druhý mozek → Předměty*.
+7. **Předměty:** v Obsidianu přidej každý svůj předmět tlačítkem **📚 Přidat předmět** (kód + název); ukázkový předmět odebereš v *Nastavení → Second Brain for KISK → Předměty*.
 8. Otevři **🏠 00 Domov** a klikni na **🩺 Zkontrolovat propojení** – vše by mělo svítit ✅.
    Při prvním tlačítku s AI povol Obsidianu ovládání Terminálu (*Nastavení systému → Soukromí a zabezpečení → Automatizace*).
 
@@ -173,7 +173,7 @@ Vyžaduje je adresář rozšíření Obsidianu:
 
 ## 🐞 Našel jsi chybu nebo máš nápad?
 
-- **Přímo v Obsidianu:** **🐞 Nahlásit chybu nebo nápad** (ikona 🧠, Cmd+P nebo *Nastavení → Druhý mozek*). Předvyplní technické údaje **bez osobních dat** (verze, jazyk, režim AI, výsledek kontroly, poslední chyby – žádné jméno, UČO, cesty ani obsah poznámek). Všechno vidíš a můžeš upravit; nic se neodešle samo. Odešleš e-mailem nebo na GitHubu.
+- **Přímo v Obsidianu:** **🐞 Nahlásit chybu nebo nápad** (ikona 🧠, Cmd+P nebo *Nastavení → Second Brain for KISK*). Předvyplní technické údaje **bez osobních dat** (verze, jazyk, režim AI, výsledek kontroly, poslední chyby – žádné jméno, UČO, cesty ani obsah poznámek). Všechno vidíš a můžeš upravit; nic se neodešle samo. Odešleš e-mailem nebo na GitHubu.
 - **Na GitHubu:** [Issues → New issue](https://github.com/shadowsh1t/second-brain-kisk/issues/new/choose) – formuláře pro chyby a nápady.
 - **Bezpečnostní problémy soukromě:** [soukromé hlášení zranitelnosti](https://github.com/shadowsh1t/second-brain-kisk/security/advisories/new) nebo e-mail na `catty.skipping888@passinbox.com` s předmětem `[SECURITY]`.
 

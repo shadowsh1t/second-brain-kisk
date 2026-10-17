@@ -33,6 +33,7 @@ const DISTRIBUCE = "github";
 const BALIK = null;
 // stejné jako VZDY_NAHRADIT v nastroje/aktualizace.py (Obsidian tabulky sám přeformátuje, takže by vypadaly jako upravené)
 const VZDY_NAHRADIT = ["_Systém/Studium.base"];
+const JEN_VYTVORIT = ["_Inbox/Inbox.md", "_Pojmy/Pojmy.md", "_Přehledy/Přehledy.md"];  // rozcestníky patří uživateli
 const PRIPONA_NOVA_VERZE = { cs: " (nová verze)", sk: " (nová verzia)", en: " (new version)", uk: " (нова версія)" };
 const AKTUALIZACE_KAZDYCH_MS = 24 * 60 * 60 * 1000;
 const VERZE = /^v?(\d+)\.(\d+)\.(\d+)$/;
@@ -141,7 +142,7 @@ module.exports = class DruhyMozek extends Plugin {
     this.data.karticky = this.data.karticky || {};
     this.data.chyby = Array.isArray(this.data.chyby) ? this.data.chyby.slice(-MAX_ZAZNAMU_CHYB) : [];
 
-    this.addRibbonIcon("brain", "Druhý mozek", (evt) => this.ukazMenu(evt));
+    this.addRibbonIcon("brain", this.manifest.name, (evt) => this.ukazMenu(evt));
     this.addSettingTab(new NastaveniTab(this.app, this));
     for (const a of this.akce()) this.addCommand({ id: a.id, name: a.nazev, callback: a.spust });
 
@@ -325,7 +326,7 @@ module.exports = class DruhyMozek extends Plugin {
     const soubory = { ...BALIK.soubory };
     const balicek = JSON.parse(BALIK.soubory[`_Systém/jazyky/${j}.json`].text).soubory;
     for (const [rel, text] of Object.entries(balicek)) {
-      soubory[rel] = { druh: rel.startsWith("Příklad předmětu/") ? "ukazka" : VZDY_NAHRADIT.includes(rel) ? "kod" : "upravitelne", text };
+      soubory[rel] = { druh: rel.startsWith("Příklad předmětu/") ? "ukazka" : VZDY_NAHRADIT.includes(rel) ? "kod" : JEN_VYTVORIT.includes(rel) ? "uzivatelske" : "upravitelne", text };
     }
     return soubory;
   }
@@ -891,8 +892,8 @@ module.exports = class DruhyMozek extends Plugin {
 
     // 6) automatická záloha
     const z = this.data.zaloha;
-    if (!z.zapnuto) bod("Automatická záloha", "varovani", T("Je vypnutá – zapni ji v Nastavení → Druhý mozek."));
-    else if (!z.slozka) bod("Automatická záloha", "varovani", T("Není nastavená složka zálohy (cloud nenalezen) – nastav ji v Nastavení → Druhý mozek."));
+    if (!z.zapnuto) bod("Automatická záloha", "varovani", T("Je vypnutá – zapni ji v Nastavení → Second Brain for KISK."));
+    else if (!z.slozka) bod("Automatická záloha", "varovani", T("Není nastavená složka zálohy (cloud nenalezen) – nastav ji v Nastavení → Second Brain for KISK."));
     else if (z.chyba) bod("Automatická záloha", "chyba", T("Poslední záloha selhala: {0}", z.chyba));
     else if (!z.posledni) bod("Automatická záloha", "ok", T("první záloha proběhne do minuty → {0}", z.slozka));
     else if (Date.now() - Date.parse(z.posledni) > 3 * ZALOHA_DENNE_MS) bod("Automatická záloha", "varovani", T("Poslední záloha je starší než 3 dny."));
@@ -1021,7 +1022,7 @@ module.exports = class DruhyMozek extends Plugin {
   async zalohuj({ tise }) {
     const z = this.data.zaloha;
     clearTimeout(this.casovacZalohy);
-    if (!z.slozka) { if (!tise) new Notice(T("💾 Není nastavená složka zálohy – nastav ji v Nastavení → Druhý mozek."), 10000); return false; }
+    if (!z.slozka) { if (!tise) new Notice(T("💾 Není nastavená složka zálohy – nastav ji v Nastavení → Second Brain for KISK."), 10000); return false; }
     if (this.zalohujeSe) return false;
     this.zalohujeSe = true;
     const koren = path.resolve(z.slozka);
@@ -1044,7 +1045,7 @@ module.exports = class DruhyMozek extends Plugin {
         T("2. Zkopíruj její obsah do složky trezoru (skryté `.obsidian` a `.claude` zobrazíš ve Finderu přes Cmd+Shift+.)."),
         z.materialy ? T("   Záloha obsahuje i studijní materiály.") : T("   Originály materiálů nech, kde jsou – záloha obsahuje jen poznámky, systém a vlastní práce."),
         T("3. V Obsidianu klikni na 🩺 Zkontrolovat propojení; když hlásí 🛡 Integrita kódu, potvrď změny opsáním kódu."), "",
-        T("Nastavení zálohy: Obsidian → Nastavení → Druhý mozek → Automatická záloha."), "",
+        T("Nastavení zálohy: Obsidian → Nastavení → Second Brain for KISK → Automatická záloha."), "",
       ].join("\n"));
       // rotace: smaže jen nejstarší složky se zálohami (podle názvu s datem) uvnitř složky záloh
       const verze = fs.readdirSync(koren).filter((n) => ZALOHA_VERZE.test(n)).sort();
@@ -1216,7 +1217,7 @@ module.exports = class DruhyMozek extends Plugin {
       T("  Když nevíš, odkud změna je, NEPOTVRZUJ ji – skripty se do potvrzení nespustí."),
       T("- ⚠️ / ❌ u Neuro Roadmap – na Domově klikni na **🔧 Nechat AI opravit**."),
       T("  AI si přečte tuhle zprávu a novou dokumentaci pluginu a upraví naše propojení."),
-      T("- 💾 Záloha ⚠️ / ❌ – zkontroluj Nastavení → Druhý mozek → Automatická záloha."),
+      T("- 💾 Záloha ⚠️ / ❌ – zkontroluj Nastavení → Second Brain for KISK → Automatická záloha."),
       "", T("*Kontrola běží sama při spuštění Obsidianu a každých 6 hodin; ručně přes 🩺 Zkontrolovat propojení.*"),
     ];
     const f = this.app.vault.getAbstractFileByPath(ZPRAVA);
@@ -1471,7 +1472,7 @@ class UkolModal extends Modal {
     new Setting(contentEl).setName(T("Termín odevzdání")).setDesc(T("Nepovinné – ukáže se na Domově a v plánu Neuro Roadmap"))
       .addText((t) => { t.inputEl.type = "date"; t.setValue(this.data.termin).onChange((v) => (this.data.termin = v)); });
     contentEl.createEl("p", { cls: "setting-item-description",
-      text: T("Dokument bude v jazyce: {0} (změníš v Nastavení → Druhý mozek → Jazyk dokumentů ve Wordu).", JAZYKY[jazykWord] || jazykWord) });
+      text: T("Dokument bude v jazyce: {0} (změníš v Nastavení → Second Brain for KISK → Jazyk dokumentů ve Wordu).", JAZYKY[jazykWord] || jazykWord) });
     new Setting(contentEl).addButton((b) => b.setButtonText(T("Vytvořit a otevřít ve Wordu")).setCta().onClick(() => {
       if (!this.data.nazev) { new Notice(T("Vyplň název práce.")); return; }
       this.close();
@@ -1818,7 +1819,7 @@ class PruvodceModal extends Modal {
     contentEl.empty();
     this.titleEl.setText(T("🧠 Nastavit druhý mozek v tomto trezoru"));
     contentEl.createEl("p", { cls: "setting-item-description", text:
-      T("Založí Domov, návod, šablony, předměty a skripty. Nic, co už v trezoru máš, se nepřepíše. Všechno změníš později v Nastavení → Druhý mozek.") });
+      T("Založí Domov, návod, šablony, předměty a skripty. Nic, co už v trezoru máš, se nepřepíše. Všechno změníš později v Nastavení → Second Brain for KISK.") });
     new Setting(contentEl).setName(T("Jazyk")).addDropdown((d) => { for (const [k, n] of Object.entries(JAZYKY)) d.addOption(k, n);
       d.setValue(v.jazyk).onChange((x) => { v.jazyk = x; v.jazykWord = x; this.plugin.nastavJazykRozhrani(x); this.vykresli(); }); });
     new Setting(contentEl).setName(T("Jazyk dokumentů ve Wordu")).addDropdown((d) => { for (const [k, n] of Object.entries(JAZYKY)) d.addOption(k, n);

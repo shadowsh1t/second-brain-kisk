@@ -53,7 +53,7 @@ jobs:
           $ZMENY
 
           **New installation (macOS):** download \`$BALIK\` below, unzip it and double-click \`Instalovat.command\`.
-          **From Obsidian:** Settings → Community plugins → Browse → *Druhý mozek* (once it is listed in the directory) – a setup guide creates everything in your vault.
+          **From Obsidian:** Settings → Community plugins → Browse → *Second Brain for KISK* (once it is listed in the directory) – a setup guide creates everything in your vault.
           **Update:** in Obsidian click *Download and install* when a new version is offered (GitHub install), or update the plugin in Obsidian (directory install). Manual: quit Obsidian, unzip, run \`Instalovat.command\` and choose *Update an existing vault*.
           The installer speaks Czech, Slovak, English and Ukrainian – see the [README]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY#readme).
 

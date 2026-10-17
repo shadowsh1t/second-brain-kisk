@@ -42,6 +42,8 @@ UZIVATELSKE = [".obsidian/snippets/druhy-mozek-predmety.css"]
 # systémové soubory z jazykového balíčku, které se vždy nahradí (Obsidian je při používání sám přeformátuje,
 # takže by vypadaly jako upravené; Domov odkazuje na jejich pohledy)
 VZDY_NAHRADIT = ["_Systém/Studium.base"]
+# rozcestníky z jazykového balíčku patří uživateli (přetahuje do nich soubory) – jen vytvořit, když chybí
+JEN_VYTVORIT = ["_Inbox/Inbox.md", "_Pojmy/Pojmy.md", "_Přehledy/Přehledy.md"]
 UKAZKA = "Příklad předmětu/"
 
 
@@ -84,7 +86,8 @@ def nove_soubory(jazyk):
     balicek = json.loads((ZDROJ / f"_Systém/jazyky/{jazyk}.json").read_text(encoding="utf8"))["soubory"]
     for rel, obsah in balicek.items():
         if bezpecna(rel) and not rel.startswith(UKAZKA):
-            soubory[rel] = (obsah.encode("utf8"), "kod" if rel in VZDY_NAHRADIT else "upravitelne")
+            druh = "kod" if rel in VZDY_NAHRADIT else "uzivatelske" if rel in JEN_VYTVORIT else "upravitelne"
+            soubory[rel] = (obsah.encode("utf8"), druh)
     return soubory
 
 

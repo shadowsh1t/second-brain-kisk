@@ -472,6 +472,15 @@ class Aktualizace(unittest.TestCase):
         sys.path.insert(0, str(self.repo / "nastroje"))
         import aktualizace
         self.assertIn(f"const VZDY_NAHRADIT = {json.dumps(aktualizace.VZDY_NAHRADIT, ensure_ascii=False)};", js, "stejné pravidlo v Pythonu i v rozšíření")
+        self.assertIn(f"const JEN_VYTVORIT = {json.dumps(aktualizace.JEN_VYTVORIT, ensure_ascii=False)};", js)
+
+    def test_inbox_patri_uzivateli(self):
+        inbox = self.t / "_Inbox/Inbox.md"
+        inbox.write_text(inbox.read_text() + "\n![[moje.pdf]]\n")
+        self.zestarni()
+        self.spust(DM_REZIM="aktualizace", DM_CIL=str(self.t))
+        self.assertIn("![[moje.pdf]]", inbox.read_text())
+        self.assertFalse(list((self.t / "_Inbox").glob("Inbox (*")), "u rozcestníku žádná „nová verze“")
 
     def test_kazdy_soubor_ma_pravidlo(self):
         """Nový soubor v trezor/ musí mít určeno, jak se aktualizuje (jinak by se k lidem nedostal)."""
@@ -567,6 +576,8 @@ class Repozitar(unittest.TestCase):
         self.assertEqual((REPO / "manifest.json").read_bytes(), (roz / "manifest.json").read_bytes(), "manifest.json v kořeni = manifest rozšíření")
         self.assertEqual(json.loads((REPO / "versions.json").read_text()).get(manifest["version"]), manifest["minAppVersion"])
         self.assertNotIn("obsidian", manifest["id"])
+        self.assertRegex(manifest["name"], r"^[A-Za-z0-9 ()+-]+$", "název: jen základní latinka, bez diakritiky a interpunkce")
+        self.assertFalse(any(x in manifest["name"].lower() for x in ("obsidian", "obsi", "sidian", "plugin")))
         self.assertTrue(manifest["description"].endswith(".") and "Obsidian" not in manifest["description"] and len(manifest["description"]) <= 250)
         self.assertTrue(manifest["isDesktopOnly"], "rozšíření používá Node (soubory, Python) – jen desktop")
         js = (roz / "main.js").read_text()

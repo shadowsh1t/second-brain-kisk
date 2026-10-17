@@ -12,7 +12,7 @@ Course materials in one place, notes and mind maps made by AI, Word assignments 
 and deadline planning – all controlled by buttons right in Obsidian.
 
 > An unofficial student project, not a product of Masaryk University.
-> In Obsidian the plugin is called **Druhý mozek** (Czech for “second brain”); folder names stay in Czech in every language.
+> In Obsidian the plugin is called **Second Brain for KISK**; folder names stay in Czech in every language.
 
 ## Features
 
@@ -41,7 +41,7 @@ Detailed user guide: the **01 Návod** note (installed in your chosen language; 
 
 ## 🤖 With AI, with another AI, or no AI at all
 
-You choose during installation and can change it any time in Obsidian (*Settings → Druhý mozek*):
+You choose during installation and can change it any time in Obsidian (*Settings → Second Brain for KISK*):
 
 | Mode | What you need | Note |
 |---|---|---|
@@ -53,7 +53,7 @@ Home, queue, deadlines, Word assignments, Neuro Roadmap and checks work in every
 
 ## 🧩 Install from Obsidian
 
-1. In Obsidian: **Settings → Community plugins → Browse**, search for **Druhý mozek**, click **Install** and **Enable**.
+1. In Obsidian: **Settings → Community plugins → Browse**, search for **Second Brain for KISK**, click **Install** and **Enable**.
 2. A setup guide opens: language, Word document language, name, UČO, your courses and AI mode. It checks that Python 3 is installed (if not, it shows where to get it).
 3. Click **🧠 Set up** – Home, the guide, templates, courses and scripts are created in your vault. Nothing that already exists is overwritten.
 
@@ -82,7 +82,7 @@ Before installing it verifies the checksums of all files. What exactly it does i
 2. **⬇️ Download and install** – the plugin downloads the package from this repository's Releases and verifies it: the ZIP checksum published with the release, the checksums of all files (`SHA256SUMS.txt`) and the version number. Until then nothing in the vault changes and **Cancel installation** stops everything.
 3. **✅ Install** – a backup of the vault is made, the system's code is replaced and the plugin reloads.
 
-**Notes, materials, courses, settings and your course CSS stay.** System notes you have edited (Home, guide, templates, AI rules) are kept and the new version is saved next to them with “(new version)”. If anything fails during installation, all changes are reverted automatically. For emergencies there is **↩️ Undo the last update** in *Settings → Druhý mozek → Updates* for 7 days; then the temporary update backup (hidden `.druhy-mozek-zaloha` folder) moves to the Trash. Clicking Install confirms 🛡 only for files identical to the verified package. Updating manually works too: download the ZIP, run `Instalovat.command` → *Update an existing vault*. The check can be turned off in *Settings → Druhý mozek → Updates*.
+**Notes, materials, courses, settings and your course CSS stay.** System notes you have edited (Home, guide, templates, AI rules) are kept and the new version is saved next to them with “(new version)”. If anything fails during installation, all changes are reverted automatically. For emergencies there is **↩️ Undo the last update** in *Settings → Second Brain for KISK → Updates* for 7 days; then the temporary update backup (hidden `.druhy-mozek-zaloha` folder) moves to the Trash. Clicking Install confirms 🛡 only for files identical to the verified package. Updating manually works too: download the ZIP, run `Instalovat.command` → *Update an existing vault*. The check can be turned off in *Settings → Second Brain for KISK → Updates*.
 
 ## Requirements
 
@@ -102,7 +102,7 @@ Before installing it verifies the checksums of all files. What exactly it does i
 2. **Copy the contents of the `trezor/` folder** into your Obsidian vault (or open the folder directly: *Obsidian → Open folder as vault*).
    The `.obsidian` and `.claude` folders are hidden – show them in Finder with **Cmd+Shift+.** (period).
 3. **Personal details:** in `_Systém/` rename `nastaveni.priklad.json` to `nastaveni.json` and fill in your name and UČO
-   (`jazyk` and `jazyk_word`: `cs`, `sk`, `en` or `uk`). Then pick the language in Obsidian under *Settings → Druhý mozek*
+   (`jazyk` and `jazyk_word`: `cs`, `sk`, `en` or `uk`). Then pick the language in Obsidian under *Settings → Second Brain for KISK*
    – the plugin rewrites the system notes (Home, guide, templates) into that language.
 4. **Logo (optional):** save your faculty's logo as `_Systém/Word/logo-muni-arts.png` (PNG, transparent background).
    The MU logo isn't in the repository because it's a trademark. Without it the header is text only.
@@ -111,9 +111,9 @@ Before installing it verifies the checksums of all files. What exactly it does i
    python3 _Systém/Word/vytvor_sablonu.py
    python3 _Systém/priprav.py
    ```
-6. **Enable the plugin:** *Obsidian → Settings → Community plugins → Turn on* and enable **Druhý mozek**.
+6. **Enable the plugin:** *Obsidian → Settings → Community plugins → Turn on* and enable **Second Brain for KISK**.
    *Settings → Appearance → CSS snippets* → enable **druhy-mozek**.
-7. **Courses:** in Obsidian use **📚 Add course** (code + name) for each of your courses; the example course can be removed in *Settings → Druhý mozek → Courses*.
+7. **Courses:** in Obsidian use **📚 Add course** (code + name) for each of your courses; the example course can be removed in *Settings → Second Brain for KISK → Courses*.
 8. Open **🏠 00 Domov** and click **🩺 Run system check** – everything should show ✅.
    On the first AI button allow Obsidian to control Terminal (*System Settings → Privacy & Security → Automation*).
 
@@ -137,7 +137,7 @@ Required by the Obsidian plugin directory:
 
 ## 🐞 Found a bug or have an idea?
 
-- **Right in Obsidian:** **🐞 Report a bug or idea** (🧠 icon, Cmd+P or *Settings → Druhý mozek*). It pre-fills technical details **without personal data** (version, language, AI mode, check result, recent errors – no name, UČO, paths or note content). You see and can edit everything; nothing is sent by itself. Send it by e-mail or on GitHub.
+- **Right in Obsidian:** **🐞 Report a bug or idea** (🧠 icon, Cmd+P or *Settings → Second Brain for KISK*). It pre-fills technical details **without personal data** (version, language, AI mode, check result, recent errors – no name, UČO, paths or note content). You see and can edit everything; nothing is sent by itself. Send it by e-mail or on GitHub.
 - **On GitHub:** [Issues → New issue](https://github.com/shadowsh1t/second-brain-kisk/issues/new/choose) – forms for bugs and ideas.
 - **Security problems privately:** [report a vulnerability](https://github.com/shadowsh1t/second-brain-kisk/security/advisories/new) or e-mail `catty.skipping888@passinbox.com` with the subject `[SECURITY]`.
 

@@ -12,7 +12,7 @@ Materiály zo školy na jednom mieste, poznámky a myšlienkové mapy vytvorené
 a plánovanie termínov – všetko ovládané tlačidlami priamo v Obsidiane.
 
 > Neoficiálny študentský projekt, nie je produktom Masarykovej univerzity.
-> V Obsidiane sa rozšírenie volá **Druhý mozek**; názvy priečinkov zostávajú v každom jazyku české.
+> V Obsidiane sa rozšírenie volá **Second Brain for KISK** (adresár rozšírení povoľuje len názvy bez diakritiky); názvy priečinkov zostávajú v češtine.
 
 ## Čo vie
 
@@ -41,7 +41,7 @@ Podrobný návod: poznámka **01 Návod** (nainštaluje sa vo zvolenom jazyku).
 
 ## 🤖 S AI, s inou AI, alebo úplne bez AI
 
-Vyberieš si pri inštalácii a kedykoľvek zmeníš v Obsidiane (*Nastavenia → Druhý mozek*):
+Vyberieš si pri inštalácii a kedykoľvek zmeníš v Obsidiane (*Nastavenia → Second Brain for KISK*):
 
 | Režim | Čo potrebuješ | Poznámka |
 |---|---|---|
@@ -53,7 +53,7 @@ Domov, front, termíny, úlohy vo Worde, Neuro Roadmap aj kontroly fungujú vo v
 
 ## 🧩 Inštalácia priamo z Obsidianu
 
-1. V Obsidiane: **Nastavenia → Pluginy tretích strán → Prehľadávať**, nájdi **Druhý mozek**, klikni **Inštalovať** a **Zapnúť**.
+1. V Obsidiane: **Nastavenia → Pluginy tretích strán → Prehľadávať**, nájdi **Second Brain for KISK**, klikni **Inštalovať** a **Zapnúť**.
 2. Otvorí sa sprievodca: jazyk, jazyk dokumentov vo Worde, meno, UČO, tvoje predmety a režim AI. Skontroluje, či máš Python 3 (ak nie, ukáže, kde ho stiahnuť).
 3. Klikni **🧠 Nastaviť** – v trezore vznikne Domov, Návod, šablóny, predmety a skripty. Nič existujúce sa neprepíše.
 
@@ -82,7 +82,7 @@ Pred inštaláciou overí kontrolné súčty všetkých súborov. Čo presne rob
 2. **⬇️ Stiahnuť a nainštalovať** – rozšírenie stiahne balík z Releases tohto repozitára a overí ho: kontrolný súčet ZIPu zverejnený pri vydaní, kontrolné súčty všetkých súborov (`SHA256SUMS.txt`) a číslo verzie. Dovtedy sa v trezore nič nemení a **Zrušiť inštaláciu** všetko zastaví.
 3. **✅ Inštalovať** – urobí sa záloha trezoru, vymení sa kód systému a rozšírenie sa znova načíta.
 
-**Poznámky, materiály, predmety, nastavenia a tvoje CSS predmetov zostanú.** Systémové poznámky, ktoré si upravil (Domov, Návod, šablóny, pravidlá AI), sa neprepíšu – nová verzia sa uloží vedľa s príponou „(nová verzia)“. Keď sa inštalácia uprostred pokazí, všetky zmeny sa samy vrátia. Pre prípad núdze je 7 dní k dispozícii **↩️ Vrátiť poslednú aktualizáciu** v *Nastavenia → Druhý mozek → Aktualizácie*; potom ide dočasná záloha z aktualizácie (skrytý priečinok `.druhy-mozek-zaloha`) do koša. Klik na Inštalovať potvrdí 🛡 len pri súboroch zhodných s overeným balíkom. Ide to aj ručne: stiahni ZIP a spusti `Instalovat.command` → *Aktualizovať existujúci trezor*. Kontrolu ide vypnúť v *Nastavenia → Druhý mozek → Aktualizácie*.
+**Poznámky, materiály, predmety, nastavenia a tvoje CSS predmetov zostanú.** Systémové poznámky, ktoré si upravil (Domov, Návod, šablóny, pravidlá AI), sa neprepíšu – nová verzia sa uloží vedľa s príponou „(nová verzia)“. Keď sa inštalácia uprostred pokazí, všetky zmeny sa samy vrátia. Pre prípad núdze je 7 dní k dispozícii **↩️ Vrátiť poslednú aktualizáciu** v *Nastavenia → Second Brain for KISK → Aktualizácie*; potom ide dočasná záloha z aktualizácie (skrytý priečinok `.druhy-mozek-zaloha`) do koša. Klik na Inštalovať potvrdí 🛡 len pri súboroch zhodných s overeným balíkom. Ide to aj ručne: stiahni ZIP a spusti `Instalovat.command` → *Aktualizovať existujúci trezor*. Kontrolu ide vypnúť v *Nastavenia → Second Brain for KISK → Aktualizácie*.
 
 ## Požiadavky
 
@@ -102,7 +102,7 @@ Pred inštaláciou overí kontrolné súčty všetkých súborov. Čo presne rob
 2. **Skopíruj obsah priečinka `trezor/`** do svojho trezoru Obsidianu (alebo priečinok rovno otvor: *Obsidian → Otvoriť priečinok ako trezor*).
    Priečinky `.obsidian` a `.claude` sú skryté – vo Finderi ich zobrazíš skratkou **Cmd+Shift+.** (bodka).
 3. **Osobné údaje:** v `_Systém/` premenuj `nastaveni.priklad.json` na `nastaveni.json` a vyplň meno a UČO
-   (`jazyk` a `jazyk_word`: `cs`, `sk`, `en` alebo `uk`). Potom v Obsidiane zvoľ jazyk v *Nastavenia → Druhý mozek*
+   (`jazyk` a `jazyk_word`: `cs`, `sk`, `en` alebo `uk`). Potom v Obsidiane zvoľ jazyk v *Nastavenia → Second Brain for KISK*
    – rozšírenie prepíše systémové poznámky (Domov, Návod, šablóny) do zvoleného jazyka.
 4. **Logo (voliteľné):** ulož logo svojej fakulty ako `_Systém/Word/logo-muni-arts.png` (PNG, priehľadné pozadie).
    Logo MU v repozitári nie je, lebo je ochrannou známkou. Bez loga má hlavička len text.
@@ -111,9 +111,9 @@ Pred inštaláciou overí kontrolné súčty všetkých súborov. Čo presne rob
    python3 _Systém/Word/vytvor_sablonu.py
    python3 _Systém/priprav.py
    ```
-6. **Zapni rozšírenie:** *Obsidian → Nastavenia → Pluginy tretích strán → Zapnúť* a povoľ **Druhý mozek**.
+6. **Zapni rozšírenie:** *Obsidian → Nastavenia → Pluginy tretích strán → Zapnúť* a povoľ **Second Brain for KISK**.
    *Nastavenia → Vzhľad → CSS úryvky* → zapni **druhy-mozek**.
-7. **Predmety:** v Obsidiane pridaj každý svoj predmet tlačidlom **📚 Pridať predmet** (kód + názov); ukážkový predmet odoberieš v *Nastavenia → Druhý mozek → Predmety*.
+7. **Predmety:** v Obsidiane pridaj každý svoj predmet tlačidlom **📚 Pridať predmet** (kód + názov); ukážkový predmet odoberieš v *Nastavenia → Second Brain for KISK → Predmety*.
 8. Otvor **🏠 00 Domov** a klikni na **🩺 Skontrolovať systém** – všetko by malo svietiť ✅.
    Pri prvom tlačidle s AI povoľ Obsidianu ovládanie Terminálu (*Nastavenia systému → Súkromie a bezpečnosť → Automatizácia*).
 
@@ -137,7 +137,7 @@ Vyžaduje ich adresár rozšírení Obsidianu:
 
 ## 🐞 Našiel si chybu alebo máš nápad?
 
-- **Priamo v Obsidiane:** **🐞 Nahlásiť chybu alebo nápad** (ikona 🧠, Cmd+P alebo *Nastavenia → Druhý mozek*). Predvyplní technické údaje **bez osobných dát** (verzia, jazyk, režim AI, výsledok kontroly, posledné chyby – žiadne meno, UČO, cesty ani obsah poznámok). Všetko vidíš a môžeš upraviť; nič sa neodošle samo. Odošleš e-mailom alebo na GitHube.
+- **Priamo v Obsidiane:** **🐞 Nahlásiť chybu alebo nápad** (ikona 🧠, Cmd+P alebo *Nastavenia → Second Brain for KISK*). Predvyplní technické údaje **bez osobných dát** (verzia, jazyk, režim AI, výsledok kontroly, posledné chyby – žiadne meno, UČO, cesty ani obsah poznámok). Všetko vidíš a môžeš upraviť; nič sa neodošle samo. Odošleš e-mailom alebo na GitHube.
 - **Na GitHube:** [Issues → New issue](https://github.com/shadowsh1t/second-brain-kisk/issues/new/choose) – formuláre pre chyby a nápady.
 - **Bezpečnostné problémy súkromne:** [súkromné hlásenie zraniteľnosti](https://github.com/shadowsh1t/second-brain-kisk/security/advisories/new) alebo e-mail na `catty.skipping888@passinbox.com` s predmetom `[SECURITY]`.
 

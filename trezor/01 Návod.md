@@ -8,7 +8,7 @@
 > 5. Co dělat dnes a co tento týden, ti řekne **🧭 Plán úkolů** (plugin Neuro Roadmap od Mattea Rossiho).
 
 > [!note] Jazyk
-> Rozhraní, Domov, tenhle návod a šablony se řídí jazykem v **Nastavení → Druhý mozek → Jazyk** (čeština, slovenština, angličtina, ukrajinština).
+> Rozhraní, Domov, tenhle návod a šablony se řídí jazykem v **Nastavení → Second Brain for KISK → Jazyk** (čeština, slovenština, angličtina, ukrajinština).
 > Dokumenty ve Wordu mají vlastní jazyk (**Jazyk dokumentů ve Wordu**) – můžeš mít třeba rozhraní česky a práce anglicky.
 > Názvy složek a systémových souborů (`_Systém`, `Poznámky`, `Úkoly`, `00 Domov`…) zůstávají ve všech jazycích česky, aby se nerozbily odkazy.
 
@@ -20,7 +20,7 @@
 |---|---|
 | **Obsidian – trezor** | všechny materiály, poznámky a úkoly na jednom místě (např. v OneDrive kvůli záloze) |
 | **🏠 Domov** | přehled: tlačítka, termíny, fronta, předměty, poslední poznámky |
-| **Rozšíření „Druhý mozek“** | tlačítka a příkazy (AI, Word, fronta, odevzdání, kontrola, záloha, jazyk) |
+| **Rozšíření „Second Brain for KISK“** | tlačítka a příkazy (AI, Word, fronta, odevzdání, kontrola, záloha, jazyk) |
 | **Neuro Roadmap** | plánování úkolů: přehled po předmětech, Gantt, Horizon, kalendář – od **Mattea Rossiho** |
 | **Šablona KISK pro Word** | úkoly s logem MUNI ARTS, předmětem, jménem a UČO |
 | **AI (Claude Code nebo jiná)** | dělá z materiálů poznámky, pojmy, myšlenkové mapy a kartičky – spouští se tlačítky |
@@ -49,7 +49,7 @@ Obě rozšíření čtou **stejné poznámky** – co založíš u nás, vidí i
 
 ## 3. Tlačítka a příkazy
 
-Najdeš je **nahoře na Domově**, pod **ikonou 🧠 v levém svislém panelu** a v paletě příkazů (**Cmd+P** → napiš „Druhý mozek“).
+Najdeš je **nahoře na Domově**, pod **ikonou 🧠 v levém svislém panelu** a v paletě příkazů (**Cmd+P** → napiš „Second Brain for KISK“).
 
 | Tlačítko | Co udělá | AI? | Kdy použít |
 |---|---|---|---|
@@ -81,7 +81,7 @@ Najdeš je **nahoře na Domově**, pod **ikonou 🧠 v levém svislém panelu** 
 
 ## 4. Práce s AI – s Claudem, s jinou AI, nebo ručně
 
-Vybereš si při instalaci a **kdykoli AI přidáš, změníš nebo odebereš**: **Nastavení → Druhý mozek** (nebo **⚙️ Nastavení**). Uložení provede jen kliknutí – AI ho změnit nemůže.
+Vybereš si při instalaci a **kdykoli AI přidáš, změníš nebo odebereš**: **Nastavení → Second Brain for KISK** (nebo **⚙️ Nastavení**). Uložení provede jen kliknutí – AI ho změnit nemůže.
 
 | Režim | Pro koho | Výhody | Na co myslet |
 |---|---|---|---|
@@ -119,7 +119,7 @@ Rozšíření zálohuje trezor samo – nemusíš na nic myslet.
 
 - **Co:** poznámky, pojmy, úkoly, Domov, systém, nastavení a **tvoje vlastní práce** (soubory začínající tvým UČO). Materiály od vyučujících (PDF, prezentace…) jen když to zapneš – když je trezor v OneDrive/Google Drive/iCloudu, už tam jsou.
 - **Kdy:** 10 minut po poslední změně, hned po potvrzení změn kódu nebo nastavení a aspoň jednou denně (když je Obsidian spuštěný). Ručně kdykoli tlačítkem **💾 Zálohovat teď**.
-- **Kam:** **Nastavení → Druhý mozek → Automatická záloha → Kam zálohovat** – OneDrive, Google Drive, Dropbox, iCloud Drive, Dokumenty, externí disk nebo vlastní složka. Výchozí je první nalezený cloud.
+- **Kam:** **Nastavení → Second Brain for KISK → Automatická záloha → Kam zálohovat** – OneDrive, Google Drive, Dropbox, iCloud Drive, Dokumenty, externí disk nebo vlastní složka. Výchozí je první nalezený cloud.
 - **Změna místa:** zeptá se, co se starými zálohami – *ponechat*, nebo *smazat staré po úspěšné záloze do nové* (nejdřív vznikne nová záloha, staré se smažou jen když se povede).
 - **Počet záloh:** 1 (jen nejnovější) až 30. Nejstarší se maže vždy až **po** úspěšném vytvoření nové – a jen vlastní složky záloh pojmenované datem.
 - **Obnova:** ve složce záloh je soubor *OBNOVA – přečti mě* – zkopíruješ obsah nejnovější zálohy zpět do trezoru.
@@ -276,7 +276,7 @@ Kontrola běží **sama při spuštění Obsidianu a každých 6 hodin**, ručn�
 
 | Soubor | Účel |
 |---|---|
-| `.obsidian/plugins/druhy-mozek/` | rozšíření „Druhý mozek“ (tlačítka, kontrola, hlídání kódu, záloha, překlady) |
+| `.obsidian/plugins/druhy-mozek/` | rozšíření „Second Brain for KISK“ (tlačítka, kontrola, hlídání kódu, záloha, překlady) |
 | `.obsidian/snippets/druhy-mozek.css` | vzhled Domova a barevné složky |
 | `.obsidian/snippets/druhy-mozek-predmety.css` | barevný pruh a kód předmětů v levém panelu (generuje se sám; pod značkou konce můžeš psát vlastní CSS) |
 | `_Systém/predmety.py` | založení předmětu a vzhled předmětů v levém panelu |

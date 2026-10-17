@@ -241,38 +241,38 @@ ISKB02 Вступ до бібліотекознавства
 
 Предмет № %s (коли введеш усі, залиш поле порожнім і натисни Продовжити; додати й вилучити їх можна й пізніше в Obsidian):" ;;
     cs:predmety_ok) echo "✅ Předměty: %s" ;;  sk:predmety_ok) echo "✅ Predmety: %s" ;;  en:predmety_ok) echo "✅ Courses: %s" ;;  uk:predmety_ok) echo "✅ Предмети: %s" ;;
-    cs:predmety_chyba) echo "Některé předměty se nepodařilo založit (ostatní ano). Opravit je můžeš v Obsidianu: Nastavení → Druhý mozek → Předměty.
+    cs:predmety_chyba) echo "Některé předměty se nepodařilo založit (ostatní ano). Opravit je můžeš v Obsidianu: Nastavení → Second Brain for KISK → Předměty.
 
 %s" ;;
-    sk:predmety_chyba) echo "Niektoré predmety sa nepodarilo založiť (ostatné áno). Opraviť ich môžeš v Obsidiane: Nastavenia → Druhý mozek → Predmety.
+    sk:predmety_chyba) echo "Niektoré predmety sa nepodarilo založiť (ostatné áno). Opraviť ich môžeš v Obsidiane: Nastavenia → Second Brain for KISK → Predmety.
 
 %s" ;;
-    en:predmety_chyba) echo "Some courses couldn't be created (the others were). You can fix them in Obsidian: Settings → Druhý mozek → Courses.
+    en:predmety_chyba) echo "Some courses couldn't be created (the others were). You can fix them in Obsidian: Settings → Second Brain for KISK → Courses.
 
 %s" ;;
-    uk:predmety_chyba) echo "Деякі предмети не вдалося створити (інші – так). Виправити їх можна в Obsidian: Налаштування → Druhý mozek → Предмети.
+    uk:predmety_chyba) echo "Деякі предмети не вдалося створити (інші – так). Виправити їх можна в Obsidian: Налаштування → Second Brain for KISK → Предмети.
 
 %s" ;;
     cs:jazyk_word) echo "V jakém jazyce budeš psát práce ve Wordu? (nadpisy a předvyplněné texty v šabloně – změníš i později v Obsidianu)" ;;
     sk:jazyk_word) echo "V akom jazyku budeš písať práce vo Worde? (nadpisy a predvyplnené texty v šablóne – zmeníš aj neskôr v Obsidiane)" ;;
     en:jazyk_word) echo "In which language will you write your Word documents? (headings and pre-filled texts in the template – can be changed later in Obsidian)" ;;
     uk:jazyk_word) echo "Якою мовою писатимеш роботи у Word? (заголовки й заповнені тексти шаблону – можна змінити пізніше в Obsidian)" ;;
-    cs:ai) echo "Jak chceš pracovat s AI? (kdykoli změníš v Obsidianu: Nastavení → Druhý mozek)
+    cs:ai) echo "Jak chceš pracovat s AI? (kdykoli změníš v Obsidianu: Nastavení → Second Brain for KISK)
 
 • Claude Code – nejlepší výsledky, platí bezpečnostní pravidla systému (potřeba předplatné Claude)
 • Jiná AI – Gemini CLI, Codex nebo vlastní program v Terminálu
 • Bez AI – vše ručně ze šablon, nic se nikam neposílá" ;;
-    sk:ai) echo "Ako chceš pracovať s AI? (kedykoľvek zmeníš v Obsidiane: Nastavenia → Druhý mozek)
+    sk:ai) echo "Ako chceš pracovať s AI? (kedykoľvek zmeníš v Obsidiane: Nastavenia → Second Brain for KISK)
 
 • Claude Code – najlepšie výsledky, platia bezpečnostné pravidlá systému (potrebné predplatné Claude)
 • Iná AI – Gemini CLI, Codex alebo vlastný program v Termináli
 • Bez AI – všetko ručne zo šablón, nič sa nikam neposiela" ;;
-    en:ai) echo "How do you want to work with AI? (change any time in Obsidian: Settings → Druhý mozek)
+    en:ai) echo "How do you want to work with AI? (change any time in Obsidian: Settings → Second Brain for KISK)
 
 • Claude Code – best results, the system's security rules apply (needs a Claude subscription)
 • Another AI – Gemini CLI, Codex or your own program in Terminal
 • No AI – everything by hand from templates, nothing is sent anywhere" ;;
-    uk:ai) echo "Як працювати зі ШІ? (можна змінити будь-коли в Obsidian: Налаштування → Druhý mozek)
+    uk:ai) echo "Як працювати зі ШІ? (можна змінити будь-коли в Obsidian: Налаштування → Second Brain for KISK)
 
 • Claude Code – найкращі результати, діють правила безпеки системи (потрібна передплата Claude)
 • Інший ШІ – Gemini CLI, Codex або власна програма в Терміналі
@@ -287,10 +287,10 @@ ISKB02 Вступ до бібліотекознавства
     sk:prikaz) echo "Príkaz AI – na miesto {prompt} sa vloží zadanie. Len písmená, číslice, medzery a . _ / = : -" ;;
     en:prikaz) echo "AI command – {prompt} is replaced by the task. Only letters, digits, spaces and . _ / = : -" ;;
     uk:prikaz) echo "Команда ШІ – замість {prompt} вставляється завдання. Лише літери, цифри, пробіли та . _ / = : -" ;;
-    cs:prikaz_neplatny) echo "Příkaz AI je neplatný – nastavím „Bez AI“. Opravit ho můžeš později v Obsidianu: Nastavení → Druhý mozek." ;;
-    sk:prikaz_neplatny) echo "Príkaz AI je neplatný – nastavím „Bez AI“. Opraviť ho môžeš neskôr v Obsidiane: Nastavenia → Druhý mozek." ;;
-    en:prikaz_neplatny) echo "The AI command is invalid – setting “No AI”. You can fix it later in Obsidian: Settings → Druhý mozek." ;;
-    uk:prikaz_neplatny) echo "Команда ШІ недійсна – буде встановлено «Без ШІ». Виправити можна пізніше в Obsidian: Налаштування → Druhý mozek." ;;
+    cs:prikaz_neplatny) echo "Příkaz AI je neplatný – nastavím „Bez AI“. Opravit ho můžeš později v Obsidianu: Nastavení → Second Brain for KISK." ;;
+    sk:prikaz_neplatny) echo "Príkaz AI je neplatný – nastavím „Bez AI“. Opraviť ho môžeš neskôr v Obsidiane: Nastavenia → Second Brain for KISK." ;;
+    en:prikaz_neplatny) echo "The AI command is invalid – setting “No AI”. You can fix it later in Obsidian: Settings → Second Brain for KISK." ;;
+    uk:prikaz_neplatny) echo "Команда ШІ недійсна – буде встановлено «Без ШІ». Виправити можна пізніше в Obsidian: Налаштування → Second Brain for KISK." ;;
     cs:jina_varovani) echo "⚠️ Bezpečnostní pravidla druhého mozku platí jen pro Claude Code. U jiné AI nech zapnuté potvrzování příkazů a nikdy nepoužívej režim bez potvrzování (např. --yolo)." ;;
     sk:jina_varovani) echo "⚠️ Bezpečnostné pravidlá druhého mozgu platia len pre Claude Code. Pri inej AI nechaj zapnuté potvrdzovanie príkazov a nikdy nepoužívaj režim bez potvrdzovania (napr. --yolo)." ;;
     en:jina_varovani) echo "⚠️ Second Brain's security rules apply only to Claude Code. With another AI keep command confirmation on and never use a no-confirmation mode (e.g. --yolo)." ;;
@@ -356,7 +356,7 @@ The MU logo isn't included (it's a trademark). If you have it as a PNG, choose i
 3. Otevři „00 Domov“ a klikni na 🩺 Zkontrolovat propojení.
 
 Volitelně si v Nastavení → Pluginy třetích stran → Procházet nainstaluj „Neuro Roadmap“ (plánování) a „Spaced Repetition“ (kartičky).
-AI, jazyk a místo zálohy změníš kdykoli: Nastavení → Druhý mozek. Automatická záloha se zapne sama.
+AI, jazyk a místo zálohy změníš kdykoli: Nastavení → Second Brain for KISK. Automatická záloha se zapne sama.
 Návod k používání: poznámka „01 Návod“." ;;
     sk:hotovo_okno) echo "Hotovo! 🎉 Teraz v Obsidiane:
 
@@ -369,7 +369,7 @@ Návod k používání: poznámka „01 Návod“." ;;
 3. Otvor „00 Domov“ a klikni na 🩺 Skontrolovať systém.
 
 Voliteľne si v Nastaveniach → Pluginy tretích strán → Prehľadávať nainštaluj „Neuro Roadmap“ (plánovanie) a „Spaced Repetition“ (kartičky).
-AI, jazyk a miesto zálohy zmeníš kedykoľvek: Nastavenia → Druhý mozek. Automatická záloha sa zapne sama.
+AI, jazyk a miesto zálohy zmeníš kedykoľvek: Nastavenia → Second Brain for KISK. Automatická záloha sa zapne sama.
 Návod na používanie: poznámka „01 Návod“." ;;
     en:hotovo_okno) echo "Done! 🎉 Now in Obsidian:
 
@@ -382,7 +382,7 @@ Návod na používanie: poznámka „01 Návod“." ;;
 3. Open “00 Domov” (Home) and click 🩺 Run system check.
 
 Optionally install “Neuro Roadmap” (planning) and “Spaced Repetition” (flashcards) in Settings → Community plugins → Browse.
-Change AI, language and backup location any time: Settings → Druhý mozek. Automatic backup turns on by itself.
+Change AI, language and backup location any time: Settings → Second Brain for KISK. Automatic backup turns on by itself.
 User guide: the “01 Návod” note." ;;
     uk:hotovo_okno) echo "Готово! 🎉 Тепер в Obsidian:
 
@@ -395,7 +395,7 @@ User guide: the “01 Návod” note." ;;
 3. Відкрий «00 Domov» (Головна) і натисни 🩺 Перевірити систему.
 
 За бажання встанови в Налаштування → Сторонні плагіни → Огляд «Neuro Roadmap» (планування) та «Spaced Repetition» (картки).
-ШІ, мову й місце резервних копій змінюй будь-коли: Налаштування → Druhý mozek. Автоматичне резервне копіювання ввімкнеться саме.
+ШІ, мову й місце резервних копій змінюй будь-коли: Налаштування → Second Brain for KISK. Автоматичне резервне копіювання ввімкнеться саме.
 Посібник: нотатка «01 Návod»." ;;
   esac
 }
