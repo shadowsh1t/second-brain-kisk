@@ -1,0 +1,67 @@
+# Automatické vydání: po vytvoření značky verze (např. v1.0.0) GitHub sám ověří a otestuje kód,
+# zabalí ZIP ke stažení a do popisu vydání zapíše kontrolní součty. Bez cizích akcí – jen git, gh a nástroje repozitáře.
+# Název ZIPu se bere z názvu repozitáře (po přejmenování repozitáře se nic nerozbije).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  vydani:
+    name: Build and publish release
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout (no third-party actions)
+        run: |
+          git clone --no-checkout "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" repo
+          cd repo && git checkout --quiet "$GITHUB_SHA"
+
+      - name: Verify and test
+        working-directory: repo
+        run: |
+          # značka musí odpovídat verzi rozšíření a v CHANGELOG.md musí být popsané změny (jinak by Obsidian hlásil novou verzi pořád)
+          VERZE=$(python3 -c 'import json; print(json.load(open("trezor/.obsidian/plugins/druhy-mozek/manifest.json"))["version"])')
+          [[ "$GITHUB_REF_NAME" == "v$VERZE" ]] || { echo "❌ tag $GITHUB_REF_NAME ≠ plugin version v$VERZE"; exit 1; }
+          grep -q "^## $VERZE " CHANGELOG.md || { echo "❌ CHANGELOG.md has no section ## $VERZE"; exit 1; }
+          shasum -a 256 -c --quiet SHA256SUMS.txt
+          bash -n Instalovat.command
+          node --check trezor/.obsidian/plugins/druhy-mozek/main.js
+          python3 tests/test_system.py
+
+      - name: Package and publish
+        working-directory: repo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NAZEV="${GITHUB_REPOSITORY#*/}"
+          BALIK="$NAZEV-$GITHUB_REF_NAME.zip"
+          git archive --format=zip --prefix="$NAZEV/" -o "../$BALIK" "$GITHUB_SHA"
+          OTISK_ZIP=$(shasum -a 256 "../$BALIK" | cut -d' ' -f1)
+          OTISK_SOUCTU=$(shasum -a 256 SHA256SUMS.txt | cut -d' ' -f1)
+          ZMENY=$(awk -v v="## ${GITHUB_REF_NAME#v} " 'index($0, v) == 1 { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md)
+          cat > ../popis.md <<EOF
+          ## Second Brain for KISK $GITHUB_REF_NAME
+
+          ### What's new
+          $ZMENY
+
+          **New installation (macOS):** download \`$BALIK\` below, unzip it and double-click \`Instalovat.command\`.
+          **Update:** quit Obsidian, unzip, run \`Instalovat.command\` and choose *Update an existing vault* – notes, materials and settings stay.
+          The installer speaks Czech, Slovak, English and Ukrainian – see the [README]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY#readme).
+
+          ### Verification
+          This package was built and tested automatically by GitHub from commit $GITHUB_SHA.
+
+          | File | SHA-256 |
+          |---|---|
+          | \`$BALIK\` | \`$OTISK_ZIP\` |
+          | \`SHA256SUMS.txt\` (inside) | \`$OTISK_SOUCTU\` |
+
+          Check in Terminal: \`shasum -a 256 $BALIK\`, and after unzipping \`shasum -a 256 -c SHA256SUMS.txt\`.
+          EOF
+          gh release create "$GITHUB_REF_NAME" "../$BALIK" --title "Second Brain for KISK $GITHUB_REF_NAME" --notes-file ../popis.md

@@ -1,0 +1,50 @@
+# ── Osobní údaje a vygenerované soubory ──
+trezor/_Systém/nastaveni.json
+trezor/_Systém/Word/Šablona KISK.dotx
+trezor/_Systém/Word/logo-*.png
+trezor/_Systém/cache/
+trezor/_Systém/registr.json
+trezor/_Systém/fronta.json
+trezor/_Systém/Fronta.md
+trezor/_Systém/Kontrola*.md
+trezor/_Systém/.priprav.lock
+trezor/_Systém/Inspirace/
+trezor/_Systém/instalace.json
+trezor/.druhy-mozek-zaloha/
+trezor/.claude/settings.json.zaloha-*
+trezor/.claude/settings.local.json
+
+# ── Data pluginů (mohou obsahovat přihlašovací údaje a klíče) ──
+trezor/.obsidian/plugins/*/data.json
+trezor/.obsidian/plugins/copilot/
+trezor/.obsidian/plugins/neuro-roadmap/
+trezor/.obsidian/workspace*.json
+trezor/.obsidian/graph.json
+
+# ── Studijní materiály, vlastní práce a poznámky (autorská práva, soukromí) ──
+*.pdf
+*.pptx
+*.ppt
+*.docx
+*.doc
+*.rtf
+*.webloc
+*.png
+*.jpg
+*.jpeg
+*.heic
+*.canvas
+trezor/*/Poznámky/*.md
+trezor/*/Úkoly/*.md
+trezor/_Pojmy/*.md
+!trezor/_Pojmy/Pojmy.md
+trezor/_Přehledy/*.md
+!trezor/_Přehledy/Přehledy.md
+
+# ── Systém ──
+.DS_Store
+.trash/
+
+# ── Rozdělaná instalace (obsahuje jméno a UČO) ──
+.instalace-postup
+__pycache__/

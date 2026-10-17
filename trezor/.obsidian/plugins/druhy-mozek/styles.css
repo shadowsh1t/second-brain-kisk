@@ -1,0 +1,27 @@
+.druhy-mozek-tlacitka { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
+.druhy-mozek-tlacitka button { cursor: pointer; border-radius: 10px; padding: 6px 12px; font-size: 0.9em; }
+
+/* banner stavu propojení na Domově */
+.druhy-mozek-banner { border-radius: 12px; padding: 8px 14px; margin: 0 0 14px; font-size: 0.9em; border: 1px solid var(--background-modifier-border); }
+.druhy-mozek-banner.is-ok { background: rgba(var(--color-green-rgb), 0.12); border-color: rgba(var(--color-green-rgb), 0.4); }
+.druhy-mozek-banner.is-opraveno { background: rgba(var(--color-blue-rgb), 0.12); border-color: rgba(var(--color-blue-rgb), 0.45); }
+.druhy-mozek-banner.is-varovani { background: rgba(var(--color-orange-rgb), 0.16); border-color: rgba(var(--color-orange-rgb), 0.6); }
+.druhy-mozek-banner.is-chyba { background: rgba(var(--color-red-rgb), 0.16); border: 2px solid rgba(var(--color-red-rgb), 0.8); }
+.druhy-mozek-banner ul { margin: 6px 0 8px; }
+
+/* upozornění vpravo nahoře */
+.notice.druhy-mozek-upozorneni { cursor: pointer; border-left: 5px solid var(--text-muted); position: relative; padding-right: 34px; }
+.druhy-mozek-zavrit { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; padding: 0; line-height: 1;
+  font-size: 18px; border-radius: 6px; background: transparent; box-shadow: none; color: var(--text-muted); cursor: pointer; }
+.druhy-mozek-zavrit:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.notice.druhy-mozek-upozorneni.is-opraveno { border-left-color: rgb(var(--color-blue-rgb)); }
+.notice.druhy-mozek-upozorneni.is-varovani { border-left-color: rgb(var(--color-orange-rgb)); }
+.notice.druhy-mozek-upozorneni.is-chyba { border-left-color: rgb(var(--color-red-rgb)); background: rgba(var(--color-red-rgb), 0.25); }
+
+/* stavový řádek dole */
+.druhy-mozek-stav-radek.is-problem { color: var(--text-on-accent); background: rgb(var(--color-red-rgb)); border-radius: 6px; padding: 0 6px; animation: druhy-mozek-blik 1.5s ease-in-out 4; }
+@keyframes druhy-mozek-blik { 50% { opacity: .45; } }
+
+/* okno hlášení chyby a tlačítko 🐞 u chybových upozornění */
+.druhy-mozek-hlaseni { width: 100%; margin: 4px 0 10px; font-family: var(--font-interface); font-size: 0.9em; }
+.druhy-mozek-nahlasit { margin-top: 6px; font-size: 0.85em; padding: 2px 8px; cursor: pointer; }

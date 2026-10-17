@@ -1,0 +1,102 @@
+/* ===== Druhý mozek – dashboard a barevné složky ===== */
+
+/* --- Dashboard: širší stránka --- */
+.dashboard { --file-line-width: 1200px; }
+
+/* --- Mřížka karet --- */
+.callout[data-callout="grid"],
+.callout[data-callout="grid2"] {
+  background: none; border: none; box-shadow: none; padding: 0; margin: 0 0 18px;
+}
+.callout[data-callout="grid"] > .callout-title,
+.callout[data-callout="grid2"] > .callout-title { display: none; }
+.callout[data-callout="grid"] > .callout-content {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;
+}
+.callout[data-callout="grid2"] > .callout-content {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;
+}
+@media (max-width: 1000px) {
+  .callout[data-callout="grid"] > .callout-content,
+  .callout[data-callout="grid2"] > .callout-content { grid-template-columns: 1fr; }
+}
+
+/* --- Karta --- */
+.dashboard .callout-content > .callout {
+  margin: 0;
+  border-radius: 16px;
+  border: 2px solid rgba(var(--callout-color), 0.45);
+  border-top: 5px solid rgb(var(--callout-color));
+  background: var(--background-secondary);
+  padding: 14px 18px;
+  overflow: hidden;
+}
+.dashboard .callout-content > .callout > .callout-title { font-size: 1.1em; font-weight: 700; }
+.dashboard .callout-content > .callout progress { width: 100%; height: 10px; }
+.dashboard .callout .bases-embed,
+.dashboard .callout .internal-embed { margin: 0; }
+
+.callout[data-callout="termin"]    { --callout-color: 97, 175, 239;  --callout-icon: lucide-alarm-clock; }
+.callout[data-callout="fronta"]    { --callout-color: 224, 108, 117; --callout-icon: lucide-inbox; }
+.callout[data-callout="akce"]      { --callout-color: 152, 195, 121; --callout-icon: lucide-zap; }
+.callout[data-callout="predmety"]  { --callout-color: 229, 192, 123; --callout-icon: lucide-book-open; }
+.callout[data-callout="prednasky"] { --callout-color: 198, 120, 221; --callout-icon: lucide-graduation-cap; }
+
+/* --- Progress bar --- */
+progress { accent-color: rgb(97, 175, 239); border-radius: 6px; }
+
+/* --- Barevné složky v levém panelu --- */
+.nav-folder-title[data-path="_Inbox"],
+.nav-folder-title[data-path="_Pojmy"],
+.nav-folder-title[data-path="_Zdroje"],
+.nav-folder-title[data-path="_Přehledy"],
+.nav-folder-title[data-path="_Systém"],
+.nav-file-title[data-path="00 Domov.md"] {
+  border-radius: 8px; font-weight: 700; margin: 2px 0;
+}
+.nav-file-title[data-path="00 Domov.md"]        { background: rgba(224, 108, 117, 0.55); }
+.nav-folder-title[data-path="_Inbox"]           { background: rgba(224, 108, 117, 0.35); }
+.nav-folder-title[data-path="_Pojmy"]           { background: rgba(229, 192, 123, 0.45); }
+.nav-folder-title[data-path="_Zdroje"]          { background: rgba(86, 182, 194, 0.40); }
+.nav-folder-title[data-path="_Přehledy"]        { background: rgba(152, 195, 121, 0.40); }
+.nav-folder-title[data-path="_Systém"]          { background: rgba(120, 140, 170, 0.35); }
+
+.nav-file-title[data-path="00 Domov.md"] .nav-file-title-content::before { content: "🏠 "; }
+.nav-folder-title[data-path="_Inbox"]    .nav-folder-title-content::before { content: "📥 "; }
+.nav-folder-title[data-path="_Pojmy"]    .nav-folder-title-content::before { content: "🧠 "; }
+.nav-folder-title[data-path="_Zdroje"]   .nav-folder-title-content::before { content: "📖 "; }
+.nav-folder-title[data-path="_Přehledy"] .nav-folder-title-content::before { content: "🗓 "; }
+.nav-folder-title[data-path="_Systém"]   .nav-folder-title-content::before { content: "⚙️ "; }
+
+/* Předměty (barevný pruh a kód před názvem) jsou v druhy-mozek-predmety.css – ten je tvůj a aktualizace ho nepřepíše. */
+
+/* --- Dashboard: úklid uvnitř karet --- */
+.dashboard .inline-title,
+.dashboard > .metadata-container,
+.markdown-preview-view.dashboard .metadata-container,
+.dashboard .cm-scroller .metadata-container { display: none; }
+.dashboard .callout-content > .callout > .callout-title { font-size: 1em; }
+.dashboard .callout .markdown-embed { border: none; padding: 0; margin: 0; }
+.dashboard .callout .markdown-embed-title,
+.dashboard .callout .markdown-embed-link,
+.dashboard .callout .markdown-embed .inline-title,
+.dashboard .callout .markdown-embed .metadata-container,
+.dashboard .callout .markdown-embed h1,
+.dashboard .callout .markdown-embed h2 { display: none; }
+.dashboard .callout .bases-header { display: none; }
+.dashboard .callout .bases-view { font-size: 0.9em; }
+
+/* --- Dashboard i v režimu úprav bez ovládacích lišt --- */
+.dashboard .bases-header,
+.dashboard .bases-toolbar,
+.dashboard .internal-embed .metadata-container,
+.dashboard .internal-embed .markdown-embed-title { display: none !important; }
+
+/* --- Karta odkazů přes celou šířku, tabulky v kartách --- */
+.dashboard .callout[data-callout="akce"] {
+  border-radius: 16px; border: 2px solid rgba(var(--callout-color), 0.45);
+  border-top: 5px solid rgb(var(--callout-color)); background: var(--background-secondary);
+}
+.dashboard .callout .bases-view { overflow-x: auto; }
+.dashboard .callout small { opacity: .7; }
+.dashboard .bases-embed { --bases-header-height: 0px; height: auto !important; overflow: visible; }

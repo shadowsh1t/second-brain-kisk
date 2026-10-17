@@ -1,0 +1,27 @@
+name: 💡 Nápad / Idea
+description: Co by se hodilo · What would be useful
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Díky za nápad! Napište, co byste chtěli a k čemu by vám to pomohlo při studiu.
+        Thanks for the idea! Describe what you'd like and how it would help you study.
+  - type: textarea
+    id: napad
+    attributes:
+      label: Co by se hodilo? · What would be useful?
+    validations:
+      required: true
+  - type: textarea
+    id: proc
+    attributes:
+      label: K čemu by to bylo? · What would it help with?
+  - type: dropdown
+    id: ai
+    attributes:
+      label: Používáte druhý mozek s AI? · Do you use it with AI?
+      options:
+        - S AI · With AI
+        - Bez AI · Without AI
+        - Obojí · Both

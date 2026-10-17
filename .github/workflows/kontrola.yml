@@ -1,0 +1,40 @@
+# Automatická kontrola při každé změně – běží na čistém Macu na serverech GitHubu.
+# Záměrně nepoužívá žádné cizí akce (actions/...), jen git a nástroje v repozitáři.
+name: Check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kontrola:
+    name: Checksums, syntax and tests
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout (no third-party actions)
+        run: |
+          git clone --no-checkout "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" repo
+          cd repo && git checkout --quiet "$GITHUB_SHA"
+
+      - name: Checksums (SHA256SUMS.txt)
+        working-directory: repo
+        run: shasum -a 256 -c --quiet SHA256SUMS.txt && echo "✅ checksums match"
+
+      - name: Syntax of installer, plugin, scripts and JSON
+        working-directory: repo
+        run: |
+          bash -n Instalovat.command
+          node --check trezor/.obsidian/plugins/druhy-mozek/main.js
+          python3 -m py_compile trezor/_Systém/*.py trezor/_Systém/Word/*.py nastroje/*.py tests/*.py
+          for f in trezor/_Systém/*.json trezor/_Systém/jazyky/*.json trezor/.obsidian/plugins/druhy-mozek/*.json trezor/.claude/settings.json; do
+            python3 -m json.tool "$f" > /dev/null || { echo "❌ invalid JSON: $f"; exit 1; }
+          done
+
+      - name: Tests (installer, Word template, queue, conversion, languages, protections, personal data)
+        working-directory: repo
+        run: python3 tests/test_system.py

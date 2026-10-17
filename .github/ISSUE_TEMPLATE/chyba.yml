@@ -1,0 +1,55 @@
+name: 🐞 Chyba / Bug
+description: Něco nefunguje · Something doesn't work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Díky za nahlášení!** Nejrychlejší je **🐞 Nahlásit chybu** přímo v Obsidianu (ikona 🧠 nebo Cmd+P) – technické údaje vyplní samo, bez osobních dat.
+        **Thanks for reporting!** The quickest way is **🐞 Report a bug** right in Obsidian (🧠 icon or Cmd+P) – it fills in technical details for you, without personal data.
+
+        ⚠️ **Bezpečnostní problém nehlaste veřejně** – použijte *Security → Report a vulnerability*. · **Don't report security issues publicly.**
+        🔒 Nevkládejte jména, UČO, hesla ani obsah svých poznámek. · Don't paste names, student IDs, passwords or the content of your notes.
+  - type: textarea
+    id: co
+    attributes:
+      label: Co se stalo? · What happened?
+      description: Co jste čekali a co se stalo místo toho. · What you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: kroky
+    attributes:
+      label: Jak to zopakovat · Steps to reproduce
+      placeholder: |
+        1. Na Domově jsem klikl(a) na … · On Home I clicked …
+        2. …
+  - type: input
+    id: verze
+    attributes:
+      label: Verze druhého mozku · Second Brain version
+      description: Nastavení → Druhý mozek → Aktualizace · Settings → Druhý mozek → Updates
+      placeholder: "1.0.0"
+  - type: dropdown
+    id: ai
+    attributes:
+      label: Režim AI · AI mode
+      options:
+        - Claude Code
+        - Jiná AI · Another AI
+        - Bez AI · No AI
+  - type: dropdown
+    id: jazyk
+    attributes:
+      label: Jazyk · Language
+      options:
+        - Čeština
+        - Slovenčina
+        - English
+        - Українська
+  - type: textarea
+    id: udaje
+    attributes:
+      label: Technické údaje (volitelné) · Technical details (optional)
+      description: Z okna 🐞 Nahlásit chybu v Obsidianu – bez osobních dat. · From the 🐞 Report a bug window in Obsidian – no personal data.
+      render: text

@@ -1,0 +1,10 @@
+{
+  "id": "druhy-mozek",
+  "name": "Druhý mozek",
+  "version": "1.0.0",
+  "minAppVersion": "1.9.0",
+  "description": "Rozšíření trezoru MUNI KISK: zpracování materiálů AI, fronta bez AI, úkoly a převod prací do šablony KISK ve Wordu. Doplňuje Neuro Roadmap.",
+  "author": "Jakub Josef Sova",
+  "authorUrl": "https://github.com/shadowsh1t",
+  "isDesktopOnly": true
+}

@@ -1,0 +1,6 @@
+# Prázdné hlášení musí jít – tlačítko 🐞 v Obsidianu otevírá předvyplněné hlášení bez šablony.
+blank_issues_enabled: true
+contact_links:
+  - name: 🔒 Bezpečnostní problém · Security issue
+    url: https://github.com/shadowsh1t/second-brain-kisk/security/advisories/new
+    about: Nahlaste soukromě, ne veřejně. · Report privately, not in public.

@@ -1,0 +1,6 @@
+/* Druhý mozek – vzhled tvých předmětů v levém panelu (oranžový pruh + kód předmětu před názvem).
+   Tenhle soubor je tvůj – aktualizace ho nepřepíše. */
+/* >>> předměty – tuhle část generuje druhý mozek (📚 Přidat předmět), ručně ji neupravuj */
+.nav-folder-title[data-path="Příklad předmětu"] { border-left: 4px solid rgb(209, 130, 100); border-radius: 4px; font-weight: 600; }
+.nav-folder-title[data-path="Příklad předmětu"] .nav-folder-title-content::before { content: "ISKB00 · "; opacity: .6; }
+/* <<< konec generované části – pod tenhle řádek můžeš psát vlastní CSS, zůstane zachované */

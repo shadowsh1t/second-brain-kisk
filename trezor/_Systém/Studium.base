@@ -1,0 +1,123 @@
+filters:
+  and:
+    - '!file.inFolder("_Systém")'
+    - '!file.inFolder("_Archiv")'
+formulas:
+  zbyva: 'if(termin.isEmpty(), "—", if((date(termin) - today()).days < 0, "⚠️ po termínu", if((date(termin) - today()).days < 1, "🔥 dnes", "za " + (date(termin) - today()).days.floor() + " dní")))'
+properties:
+  formula.zbyva:
+    displayName: Zbývá
+  file.name:
+    displayName: Název
+  note.predmet:
+    displayName: Předmět
+  note.termin:
+    displayName: Termín
+  note.kod:
+    displayName: Kód
+  note.ukonceni:
+    displayName: Ukončení
+  note.datum:
+    displayName: Datum
+  note.stav:
+    displayName: Stav
+  note.predmety:
+    displayName: Předměty
+views:
+  - type: table
+    name: Nejbližší termíny
+    filters:
+      and:
+        - typ == "ukol"
+        - stav != "hotovo"
+    order:
+      - formula.zbyva
+      - file.name
+      - predmet
+    columnSize:
+      formula.zbyva: 85
+      file.name: 230
+      note.predmet: 170
+    sort:
+      - property: termin
+        direction: ASC
+    limit: 6
+  - type: table
+    name: Předměty
+    filters:
+      and:
+        - typ == "predmet"
+    order:
+      - kod
+      - file.name
+      - ukonceni
+    columnSize:
+      note.kod: 70
+      file.name: 220
+      note.ukonceni: 150
+    sort:
+      - property: kod
+        direction: ASC
+  - type: table
+    name: Poslední poznámky
+    filters:
+      and:
+        - typ == "prednaska"
+    order:
+      - file.name
+      - predmet
+    columnSize:
+      file.name: 290
+      note.predmet: 170
+    sort:
+      - property: file.mtime
+        direction: DESC
+    limit: 8
+  - type: table
+    name: Přednášky předmětu
+    filters:
+      and:
+        - typ == "prednaska"
+        - file.inFolder(this.file.folder)
+    order:
+      - file.name
+      - datum
+      - stav
+    sort:
+      - property: file.name
+        direction: ASC
+  - type: table
+    name: Úkoly předmětu
+    filters:
+      and:
+        - typ == "ukol"
+        - file.inFolder(this.file.folder)
+    order:
+      - file.name
+      - termin
+      - formula.zbyva
+      - stav
+    sort:
+      - property: termin
+        direction: ASC
+  - type: table
+    name: Přehledy
+    filters:
+      and:
+        - typ == "prehled"
+    order:
+      - file.name
+    sort:
+      - property: file.name
+        direction: DESC
+  - type: table
+    name: Pojmy
+    filters:
+      and:
+        - typ == "pojem"
+    order:
+      - file.name
+      - predmety
+    sort:
+      - property: file.name
+        direction: ASC
