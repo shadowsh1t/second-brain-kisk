@@ -3,6 +3,10 @@
 All notable changes to Second Brain for KISK. The newest version is at the top.
 When a new version is released, Obsidian offers it under **🆕 A new version of Second Brain is available** with a link to this list.
 
+## 1.0.4 – 2026-10-18
+
+- The plugin no longer restarts itself (the Obsidian directory does not allow it). After changing the language, command names are translated right away. After an update or a revert, a notice asks you to restart Obsidian to load the new version.
+
 ## 1.0.3 – 2026-10-17
 
 - **Smarter token saver** – the text prepared for the AI now includes slide titles as structure, **tables** from presentations and Word documents as Markdown tables, **chart data**, **speaker notes** and **links**. Slides and pages that are mostly a picture are marked, and their images are unpacked so the AI looks only at those.

@@ -663,7 +663,8 @@ class Repozitar(unittest.TestCase):
         self.assertTrue(manifest["description"].endswith(".") and "Obsidian" not in manifest["description"] and len(manifest["description"]) <= 250)
         self.assertTrue(manifest["isDesktopOnly"], "rozšíření používá Node (soubory, Python) – jen desktop")
         js = (roz / "main.js").read_text()
-        for zakazane in ("innerHTML", "outerHTML", "insertAdjacentHTML", ".style.", "console.log", 'createEl("h1"', 'createEl("h2"', 'createEl("h3"', "hotkeys:"):
+        for zakazane in ("innerHTML", "outerHTML", "insertAdjacentHTML", ".style.", "console.log", 'createEl("h1"', 'createEl("h2"', 'createEl("h3"', "hotkeys:",
+                         "disablePlugin", "enablePlugin"):  # samo-restart rozšíření = chyba v kontrole adresáře
             self.assertNotIn(zakazane, js, f"pravidla Obsidianu: {zakazane}")
         with tempfile.TemporaryDirectory() as d:
             kopie = Path(d) / "repo"
@@ -672,6 +673,8 @@ class Repozitar(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             vystup = (kopie / "dist/main.js").read_text()
             self.assertIn('const DISTRIBUCE = "obsidian";', vystup)
+            for zakazane in ("disablePlugin", "enablePlugin"):
+                self.assertNotIn(zakazane, vystup, f"kontrola adresáře: {zakazane}")
             self.assertNotIn("const BALIK = null;", vystup)
             self.assertTrue((kopie / "dist/manifest.json").exists() and (kopie / "dist/styles.css").exists())
             balik = json.loads(vystup.split("const BALIK = ", 1)[1].split(";\n", 1)[0])

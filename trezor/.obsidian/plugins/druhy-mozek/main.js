@@ -144,7 +144,7 @@ module.exports = class DruhyMozek extends Plugin {
 
     this.addRibbonIcon("brain", this.manifest.name, (evt) => this.ukazMenu(evt));
     this.addSettingTab(new NastaveniTab(this.app, this));
-    for (const a of this.akce()) this.addCommand({ id: a.id, name: a.nazev, callback: a.spust });
+    this.registrujPrikazy();
 
     // ```druhy-mozek``` v poznámce vykreslí tlačítka akcí, ```druhy-mozek-stav``` stav kontroly (obojí na Domově)
     this.registerMarkdownCodeBlockProcessor("druhy-mozek", (zdroj, el) => this.vykresliTlacitka(zdroj, el));
@@ -256,14 +256,14 @@ module.exports = class DruhyMozek extends Plugin {
     return zapsano;
   }
 
-  async znovuNacistRozsireni() {
-    const app = this.app, id = this.manifest.id;
-    setTimeout(async () => {
-      try {
-        await app.plugins.disablePlugin(id);
-        await app.plugins.enablePlugin(id);
-      } catch (e) { /* názvy v paletě příkazů se změní po restartu Obsidianu */ }
-    }, 300);
+  // Příkazy v paletě; po změně jazyka se přejmenují na místě – rozšíření se samo nevypíná ani nezapíná (pravidla adresáře)
+  registrujPrikazy() {
+    if (typeof this.removeCommand === "function") for (const id of this.prikazy || []) this.removeCommand(id);
+    this.prikazy = [];
+    for (const a of this.akce()) {
+      this.addCommand({ id: a.id, name: a.nazev, callback: a.spust });
+      this.prikazy.push(a.id);
+    }
   }
 
   // ---------- Akce ----------
@@ -758,8 +758,8 @@ module.exports = class DruhyMozek extends Plugin {
       }
       await this.saveData(this.data);
       new Notice(T("✅ Aktualizováno na verzi {0}.", v.verze) +
-        (v.ponechano.length ? " " + T("Upravené soubory zůstaly, nová verze je vedle nich: {0}", v.ponechano.join(", ")) : ""), 12000);
-      this.znovuNacistRozsireni();
+        (v.ponechano.length ? " " + T("Upravené soubory zůstaly, nová verze je vedle nich: {0}", v.ponechano.join(", ")) : "") +
+        " " + T("Restartuj Obsidian, aby se načetla nová verze rozšíření."), 0);
       return v;
     } finally {
       this.uklidBalik(balik);
@@ -803,8 +803,8 @@ module.exports = class DruhyMozek extends Plugin {
     } catch (e) { /* evidence chybí – nevadí */ }
     // otisky se NEpotvrzují samy – vrácené soubory potvrdíš v 🛡 opsáním kódu
     await this.saveData(this.data);
-    new Notice(T("↩️ Vráceno na verzi {0}. Na Domově potvrď 🛡 změny kódu.", a.z), 12000);
-    this.znovuNacistRozsireni();
+    new Notice(T("↩️ Vráceno na verzi {0}. Na Domově potvrď 🛡 změny kódu.", a.z) + " " +
+      T("Restartuj Obsidian, aby se načetla nová verze rozšíření."), 0);
     return a;
   }
 
@@ -1295,7 +1295,7 @@ module.exports = class DruhyMozek extends Plugin {
     new Notice(zpravy.join("\n"), chyba ? 12000 : 6000);
     await this.kontrola({ automaticky: true });  // ozve se jen při problému
     if (this.data.zaloha.zapnuto) this.zalohuj({ tise: true });
-    if (zmenaJazyka) this.znovuNacistRozsireni();  // aby se přeložily i názvy příkazů
+    if (zmenaJazyka) this.registrujPrikazy();  // aby se přeložily i názvy příkazů
   }
 
   nastaveni() {
