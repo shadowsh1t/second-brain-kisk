@@ -5,7 +5,8 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    # Obsidian vyžaduje značku přesně jako verzi (1.0.1); starší tvar v1.0.0 funguje taky
+    tags: ["v*", "[0-9]*.[0-9]*.[0-9]*"]
 
 permissions:
   contents: write
@@ -26,7 +27,8 @@ jobs:
         run: |
           # značka musí odpovídat verzi rozšíření a v CHANGELOG.md musí být popsané změny (jinak by Obsidian hlásil novou verzi pořád)
           VERZE=$(python3 -c 'import json; print(json.load(open("trezor/.obsidian/plugins/druhy-mozek/manifest.json"))["version"])')
-          [[ "$GITHUB_REF_NAME" == "v$VERZE" ]] || { echo "❌ tag $GITHUB_REF_NAME ≠ plugin version v$VERZE"; exit 1; }
+          [[ "$GITHUB_REF_NAME" == "$VERZE" || "$GITHUB_REF_NAME" == "v$VERZE" ]] || { echo "❌ tag $GITHUB_REF_NAME ≠ plugin version $VERZE"; exit 1; }
+          cmp -s manifest.json trezor/.obsidian/plugins/druhy-mozek/manifest.json || { echo "❌ manifest.json in the root differs from the plugin"; exit 1; }
           grep -q "^## $VERZE " CHANGELOG.md || { echo "❌ CHANGELOG.md has no section ## $VERZE"; exit 1; }
           shasum -a 256 -c --quiet SHA256SUMS.txt
           bash -n Instalovat.command
@@ -51,7 +53,8 @@ jobs:
           $ZMENY
 
           **New installation (macOS):** download \`$BALIK\` below, unzip it and double-click \`Instalovat.command\`.
-          **Update:** quit Obsidian, unzip, run \`Instalovat.command\` and choose *Update an existing vault* – notes, materials and settings stay.
+          **From Obsidian:** Settings → Community plugins → Browse → *Druhý mozek* (once it is listed in the directory) – a setup guide creates everything in your vault.
+          **Update:** in Obsidian click *Download and install* when a new version is offered (GitHub install), or update the plugin in Obsidian (directory install). Manual: quit Obsidian, unzip, run \`Instalovat.command\` and choose *Update an existing vault*.
           The installer speaks Czech, Slovak, English and Ukrainian – see the [README]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY#readme).
 
           ### Verification
@@ -64,4 +67,6 @@ jobs:
 
           Check in Terminal: \`shasum -a 256 $BALIK\`, and after unzipping \`shasum -a 256 -c SHA256SUMS.txt\`.
           EOF
-          gh release create "$GITHUB_REF_NAME" "../$BALIK" --title "Second Brain for KISK $GITHUB_REF_NAME" --notes-file ../popis.md
+          # soubory pro adresář rozšíření Obsidianu (main.js s přibaleným systémem, manifest.json, styles.css)
+          python3 nastroje/sestav_rozsireni.py
+          gh release create "$GITHUB_REF_NAME" "../$BALIK" dist/main.js dist/manifest.json dist/styles.css --title "Second Brain for KISK $GITHUB_REF_NAME" --notes-file ../popis.md

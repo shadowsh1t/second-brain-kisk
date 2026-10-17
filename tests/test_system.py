@@ -460,6 +460,19 @@ class Aktualizace(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertEqual(list(venku.iterdir()), [])
 
+    def test_tabulky_se_vzdy_nahradi(self):
+        """Obsidian si Studium.base sám přeformátuje – aktualizace ho nesmí brát jako úpravu a dělat druhou tabulku."""
+        base = self.t / "_Systém/Studium.base"
+        base.write_text(base.read_text().replace("    sort:", "    sort:  ") + "\n")  # jiné formátování, stejný obsah
+        self.zestarni()
+        self.spust(DM_REZIM="aktualizace", DM_CIL=str(self.t))
+        self.assertEqual(base.read_text(), (self.repo / "trezor/_Systém/Studium.base").read_text())
+        self.assertFalse(list((self.t / "_Systém").glob("Studium (*")), "žádná druhá tabulka")
+        js = (self.repo / "trezor/.obsidian/plugins/druhy-mozek/main.js").read_text()
+        sys.path.insert(0, str(self.repo / "nastroje"))
+        import aktualizace
+        self.assertIn(f"const VZDY_NAHRADIT = {json.dumps(aktualizace.VZDY_NAHRADIT, ensure_ascii=False)};", js, "stejné pravidlo v Pythonu i v rozšíření")
+
     def test_kazdy_soubor_ma_pravidlo(self):
         """Nový soubor v trezor/ musí mít určeno, jak se aktualizuje (jinak by se k lidem nedostal)."""
         sys.path.insert(0, str(REPO / "nastroje"))
@@ -546,6 +559,33 @@ class Repozitar(unittest.TestCase):
         for r in ("Write(_Systém/**/*.json)", "Write(_Systém/**/*.base)", "Write(_Systém/**/*.py)", "Write(.obsidian/**)", "Write(.claude/**)"):
             self.assertIn(r, o["ask"])
         self.assertEqual(o.get("disableBypassPermissionsMode"), "disable")
+
+    def test_rozsireni_pro_adresar_obsidianu(self):
+        """Verze pro community.obsidian.md: sestavení, manifest v kořeni, pravidla adresáře."""
+        roz = ZDROJ / ".obsidian/plugins/druhy-mozek"
+        manifest = json.loads((roz / "manifest.json").read_text())
+        self.assertEqual((REPO / "manifest.json").read_bytes(), (roz / "manifest.json").read_bytes(), "manifest.json v kořeni = manifest rozšíření")
+        self.assertEqual(json.loads((REPO / "versions.json").read_text()).get(manifest["version"]), manifest["minAppVersion"])
+        self.assertNotIn("obsidian", manifest["id"])
+        self.assertTrue(manifest["description"].endswith(".") and "Obsidian" not in manifest["description"] and len(manifest["description"]) <= 250)
+        self.assertTrue(manifest["isDesktopOnly"], "rozšíření používá Node (soubory, Python) – jen desktop")
+        js = (roz / "main.js").read_text()
+        for zakazane in ("innerHTML", "outerHTML", "insertAdjacentHTML", ".style.", "console.log", 'createEl("h1"', 'createEl("h2"', 'createEl("h3"', "hotkeys:"):
+            self.assertNotIn(zakazane, js, f"pravidla Obsidianu: {zakazane}")
+        with tempfile.TemporaryDirectory() as d:
+            kopie = Path(d) / "repo"
+            shutil.copytree(REPO, kopie, ignore=shutil.ignore_patterns(".git", "__pycache__", "dist"))
+            r = subprocess.run([sys.executable, str(kopie / "nastroje/sestav_rozsireni.py")], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            vystup = (kopie / "dist/main.js").read_text()
+            self.assertIn('const DISTRIBUCE = "obsidian";', vystup)
+            self.assertNotIn("const BALIK = null;", vystup)
+            self.assertTrue((kopie / "dist/manifest.json").exists() and (kopie / "dist/styles.css").exists())
+            balik = json.loads(vystup.split("const BALIK = ", 1)[1].split(";\n", 1)[0])
+            self.assertEqual(balik["verze"], manifest["version"])
+            self.assertIn("_Systém/prehledy.py", balik["soubory"])
+            self.assertIn("en", balik["preklady"])
+            self.assertFalse(any(r.startswith(".obsidian/plugins/druhy-mozek/") for r in balik["soubory"]), "rozšíření samo dodá Obsidian")
 
     def test_adresa_pro_hlaseni(self):
         """Hlášení chyb musí mít skutečnou adresu (zástupná example.invalid by hlášení zahodila)."""

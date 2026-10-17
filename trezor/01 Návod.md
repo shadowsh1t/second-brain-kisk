@@ -258,6 +258,7 @@ Kontrola běží **sama při spuštění Obsidianu a každých 6 hodin**, ručn�
 | Chci přidat nebo odebrat předmět | **📚 Přidat předmět**; odebrání v **⚙️ Nastavení → Předměty → 🗑 Odebrat** (jde do koše) |
 | Vyšla nová verze | okno **🆕 Je dostupná nová verze** → ⬇️ Stáhnout → `Instalovat.command` → *Aktualizovat existující trezor* |
 | Něco nefunguje a nevím proč | **🐞 Nahlásit chybu nebo nápad** (🧠 / Cmd+P / ⚙️ Nastavení) – technické údaje bez osobních dat předvyplní samo, vše vidíš a odešleš sám e-mailem nebo na GitHubu |
+| Terminál hlásí `Please run /login` nebo `OAuth access token has expired` | vypršelo přihlášení ke Claude: v tom okně Terminálu napiš `/login`, přihlas se v prohlížeči a pak zopakuj příkaz (např. `/zpracuj`) |
 
 ---
 

@@ -48,3 +48,6 @@ trezor/_Přehledy/*.md
 # ── Rozdělaná instalace (obsahuje jméno a UČO) ──
 .instalace-postup
 __pycache__/
+
+# ── Sestavené rozšíření pro adresář Obsidianu (vytváří se při vydání) ──
+dist/

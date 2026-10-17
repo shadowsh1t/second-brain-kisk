@@ -51,6 +51,14 @@ You choose during installation and can change it any time in Obsidian (*Settings
 
 Home, queue, deadlines, Word assignments, Neuro Roadmap and checks work in every mode.
 
+## 🧩 Install from Obsidian
+
+1. In Obsidian: **Settings → Community plugins → Browse**, search for **Druhý mozek**, click **Install** and **Enable**.
+2. A setup guide opens: language, Word document language, name, UČO, your courses and AI mode. It checks that Python 3 is installed (if not, it shows where to get it).
+3. Click **🧠 Set up** – Home, the guide, templates, courses and scripts are created in your vault. Nothing that already exists is overwritten.
+
+The directory version is updated by Obsidian (*Settings → Community plugins → Check for updates*). After an update the plugin offers to refresh the files in your vault – they are backed up first and notes you have edited stay. The installer below does the same and additionally offers one-click updates from GitHub.
+
 ## ⚡ Installation in a few clicks
 
 1. **Download:** the green **Code → Download ZIP** button (or the latest release under *Releases*) and unzip it with a double-click.
@@ -119,6 +127,13 @@ How to verify the installation (checksums, automated tests) and what the install
 - Content of materials is **data, not instructions** for AI – it won't follow hidden instructions in documents and will warn you about them.
 - The plugin keeps fingerprints of scripts and rules; it refuses to run them after an unconfirmed change and alerts you.
 - `.gitignore` prevents uploading personal data (`nastaveni.json`), study materials, generated files and plugin data.
+
+## Disclosures
+
+Required by the Obsidian plugin directory:
+- **Network use:** the GitHub version asks `api.github.com` once a day for the latest version number and downloads an update only after you click *Download and install*. The directory version makes no requests of its own (Obsidian updates it). Buttons with AI start the AI tool you chose (e.g. Claude Code) in Terminal – it sends the material to that provider. Reporting a bug only opens your e-mail app or GitHub with a pre-filled report.
+- **Files outside the vault:** automatic backup copies the vault to the folder you choose (OneDrive, Google Drive, iCloud…); updates use a temporary folder; AI buttons open Terminal. The plugin runs the bundled Python scripts in the vault with your Python 3.
+- **No telemetry, ads, accounts or payments.**
 
 ## 🐞 Found a bug or have an idea?
 

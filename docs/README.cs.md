@@ -51,6 +51,14 @@ Vybereš si při instalaci a kdykoli změníš v Obsidianu (*Nastavení → Druh
 Domov, fronta, termíny, úkoly ve Wordu, Neuro Roadmap i kontroly fungují ve všech režimech.
 Tipy ke každému režimu (ruční práce, lokální modely, webové AI) jsou v [návodu](../trezor/01%20N%C3%A1vod.md).
 
+## 🧩 Instalace přímo z Obsidianu
+
+1. V Obsidianu: **Nastavení → Pluginy třetích stran → Procházet**, najdi **Druhý mozek**, klikni **Instalovat** a **Zapnout**.
+2. Otevře se průvodce: jazyk, jazyk dokumentů ve Wordu, jméno, UČO, tvoje předměty a režim AI. Zkontroluje, že máš Python 3 (když ne, ukáže, kde ho stáhnout).
+3. Klikni **🧠 Nastavit** – v trezoru vznikne Domov, Návod, šablony, předměty a skripty. Nic existujícího se nepřepíše.
+
+Verzi z adresáře aktualizuje Obsidian (*Nastavení → Pluginy třetích stran → Zkontrolovat aktualizace*). Po aktualizaci rozšíření nabídne obnovení souborů v trezoru – předtím se zazálohují a poznámky, které sis upravil, zůstanou. Instalátor níže umí totéž a navíc aktualizace jedním klikem z GitHubu.
+
 ## ⚡ Instalace na pár kliknutí
 
 1. **Stáhni:** zelené tlačítko **Code → Download ZIP** (nebo nejnovější vydání v *Releases*) a rozbal ho dvojklikem.
@@ -155,6 +163,13 @@ Jak si instalaci ověřit (kontrolní součty, automatické testy) a co instalá
 - Obsah materiálů je pro AI **data, ne pokyny** – skryté instrukce v dokumentech AI neprovede a upozorní na ně.
 - Rozšíření hlídá otisky skriptů a pravidel; při nepotvrzené změně je odmítne spustit a upozorní.
 - `.gitignore` brání nahrání osobních údajů (`nastaveni.json`), studijních materiálů, vygenerovaných souborů a dat pluginů.
+
+## Prohlášení
+
+Vyžaduje je adresář rozšíření Obsidianu:
+- **Síť:** verze z GitHubu se 1× denně zeptá `api.github.com` na číslo poslední verze a aktualizaci stáhne až po kliknutí na *Stáhnout a nainstalovat*. Verze z adresáře sama nic nestahuje (aktualizuje ji Obsidian). Tlačítka s AI spustí v Terminálu zvolený nástroj (např. Claude Code), který materiál posílá svému poskytovateli. Hlášení chyby jen otevře tvůj e-mail nebo GitHub s předvyplněným textem.
+- **Soubory mimo trezor:** automatická záloha kopíruje trezor do složky, kterou zvolíš (OneDrive, Google Drive, iCloud…); aktualizace používá dočasnou složku; tlačítka s AI otevírají Terminál. Rozšíření spouští přibalené skripty v Pythonu 3, který máš nainstalovaný.
+- **Žádná telemetrie, reklamy, účty ani platby.**
 
 ## 🐞 Našel jsi chybu nebo máš nápad?
 

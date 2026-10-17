@@ -25,3 +25,4 @@
 /* okno hlášení chyby a tlačítko 🐞 u chybových upozornění */
 .druhy-mozek-hlaseni { width: 100%; margin: 4px 0 10px; font-family: var(--font-interface); font-size: 0.9em; }
 .druhy-mozek-nahlasit { margin-top: 6px; font-size: 0.85em; padding: 2px 8px; cursor: pointer; }
+.druhy-mozek-varovani { margin-top: 4px; }

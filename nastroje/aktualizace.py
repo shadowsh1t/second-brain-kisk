@@ -39,6 +39,9 @@ KOD_SLOZKY = [".claude/commands/"]
 UPRAVITELNE = [".claude/CLAUDE.md"]
 # nikdy nepřepisovat (ani když chybí, kromě vytvoření)
 UZIVATELSKE = [".obsidian/snippets/druhy-mozek-predmety.css"]
+# systémové soubory z jazykového balíčku, které se vždy nahradí (Obsidian je při používání sám přeformátuje,
+# takže by vypadaly jako upravené; Domov odkazuje na jejich pohledy)
+VZDY_NAHRADIT = ["_Systém/Studium.base"]
 UKAZKA = "Příklad předmětu/"
 
 
@@ -81,7 +84,7 @@ def nove_soubory(jazyk):
     balicek = json.loads((ZDROJ / f"_Systém/jazyky/{jazyk}.json").read_text(encoding="utf8"))["soubory"]
     for rel, obsah in balicek.items():
         if bezpecna(rel) and not rel.startswith(UKAZKA):
-            soubory[rel] = (obsah.encode("utf8"), "upravitelne")
+            soubory[rel] = (obsah.encode("utf8"), "kod" if rel in VZDY_NAHRADIT else "upravitelne")
     return soubory
 
 

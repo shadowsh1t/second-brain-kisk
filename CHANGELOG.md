@@ -3,6 +3,13 @@
 All notable changes to Second Brain for KISK. The newest version is at the top.
 When a new version is released, Obsidian offers it under **🆕 A new version of Second Brain is available** with a link to this list.
 
+## 1.0.1 – 2026-10-17
+
+- **Available in the Obsidian plugin directory** – install *Druhý mozek* in Obsidian (Settings → Community plugins → Browse). On first start a setup guide asks for language, name, UČO, courses and AI mode and creates Home, the guide, templates and scripts in your vault. The directory version is updated by Obsidian; after an update it offers to refresh the files in your vault (edited notes stay).
+- The GitHub installer and one-click updates keep working as before.
+- Settings and dialogs follow Obsidian's plugin guidelines (headings, no inline styles).
+- Guide: what to do when Claude Code asks you to `/login` again.
+
 ## 1.0.0 – 2026-10-17
 
 First public release.

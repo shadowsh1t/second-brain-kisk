@@ -27,6 +27,13 @@ const KONTROLA_KAZDYCH_MS = 6 * 60 * 60 * 1000;
 
 // Aktualizace: jednou denně se zeptá GitHubu na číslo poslední verze (nic se neodesílá, nic se samo neinstaluje)
 const REPOZITAR = "shadowsh1t/second-brain-kisk";
+// Odkud je rozšíření: "github" = instalátor z GitHubu (aktualizace jedním klikem), "obsidian" = adresář rozšíření Obsidianu
+// (aktualizuje Obsidian; systém pro trezor je přibalený v BALIK). Obojí doplňuje nastroje/sestav_rozsireni.py.
+const DISTRIBUCE = "github";
+const BALIK = null;
+// stejné jako VZDY_NAHRADIT v nastroje/aktualizace.py (Obsidian tabulky sám přeformátuje, takže by vypadaly jako upravené)
+const VZDY_NAHRADIT = ["_Systém/Studium.base"];
+const PRIPONA_NOVA_VERZE = { cs: " (nová verze)", sk: " (nová verzia)", en: " (new version)", uk: " (нова версія)" };
 const AKTUALIZACE_KAZDYCH_MS = 24 * 60 * 60 * 1000;
 const VERZE = /^v?(\d+)\.(\d+)\.(\d+)$/;
 const novejsiVerze = (a, b) => {
@@ -150,6 +157,8 @@ module.exports = class DruhyMozek extends Plugin {
 
     // kontrola: po startu, pak každých 6 hodin (zachytí i aktualizaci Neuro Roadmap)
     this.app.workspace.onLayoutReady(() => setTimeout(() => this.kontrola({ automaticky: true }), 8000));
+    // verze z adresáře Obsidianu: první spuštění → průvodce; po aktualizaci rozšíření → nabídnout obnovu souborů v trezoru
+    this.app.workspace.onLayoutReady(() => setTimeout(() => this.zkontrolujPribalenySystem(), 2500));
     this.registerInterval(window.setInterval(() => this.kontrola({ automaticky: true }), KONTROLA_KAZDYCH_MS));
 
     // nová verze: po startu a pak jednou denně („Teď ne“ = zeptá se znovu po dalším spuštění Obsidianu)
@@ -204,13 +213,17 @@ module.exports = class DruhyMozek extends Plugin {
   // ---------- Jazyk ----------
 
   nactiJazyk() {
-    JAZYK = JAZYKY[this.nastaveni().jazyk] ? this.nastaveni().jazyk : "cs";
+    this.nastavJazykRozhrani(this.nastaveni().jazyk);
+  }
+
+  nastavJazykRozhrani(jazyk) {
+    JAZYK = JAZYKY[jazyk] ? jazyk : "cs";
     SLOVNIK = {};
     if (JAZYK === "cs") return;
     try {
       SLOVNIK = JSON.parse(fs.readFileSync(path.join(this.zaklad, this.manifest.dir, "preklady.json"), "utf8"))[JAZYK] || {};
     } catch (e) {
-      SLOVNIK = {};
+      SLOVNIK = BALIK?.preklady?.[JAZYK] || {};
     }
   }
 
@@ -241,9 +254,16 @@ module.exports = class DruhyMozek extends Plugin {
 
   // ---------- Akce ----------
 
+  jeNastaveno() {
+    return fs.existsSync(path.join(this.zaklad, "_Systém", "nastaveni.json"));
+  }
+
   akce() {
+    if (BALIK && !this.jeNastaveno()) {
+      return [{ id: "nastavit", ikona: "brain", nazev: T("🧠 Nastavit druhý mozek v tomto trezoru"), spust: () => new PruvodceModal(this).open() }];
+    }
     const bezAI = this.rezimAI() === "zadna";
-    return this.vsechnyAkce().filter((a) => !(bezAI && a.ai));
+    return this.vsechnyAkce().filter((a) => !(bezAI && a.ai) && !(a.jenGithub && DISTRIBUCE !== "github"));
   }
 
   vsechnyAkce() {
@@ -269,7 +289,7 @@ module.exports = class DruhyMozek extends Plugin {
       { id: "predmet", ikona: "book-plus", nazev: T("📚 Přidat předmět"), spust: () => new PredmetNovyModal(this).open() },
       { id: "hlaseni", ikona: "bug", nazev: T("🐞 Nahlásit chybu nebo nápad"), spust: () => new HlaseniModal(this).open() },
       { id: "zalohovat", ikona: "hard-drive-upload", nazev: T("💾 Zálohovat teď"), spust: () => this.zalohuj({ tise: false }) },
-      { id: "aktualizace", ikona: "refresh-cw", nazev: T("🔄 Zkontrolovat novou verzi"), spust: () => this.zkontrolujAktualizace({ automaticky: false }) },
+      { id: "aktualizace", jenGithub: true, ikona: "refresh-cw", nazev: T("🔄 Zkontrolovat novou verzi"), spust: () => this.zkontrolujAktualizace({ automaticky: false }) },
       { id: "nastaveni", ikona: "settings", nazev: T("⚙️ Nastavení (AI, záloha, jazyky, jméno)"), spust: () => this.otevriNastaveni() },
       { id: "domov", ikona: "home", nazev: T("🏠 Otevřít Domov"), spust: () => this.app.workspace.openLinkText(DOMOV, "", false) },
       { id: "kontrola", ikona: "stethoscope", nazev: T("🩺 Zkontrolovat propojení"), spust: () => this.kontrola({ automaticky: false }) },
@@ -295,6 +315,138 @@ module.exports = class DruhyMozek extends Plugin {
     await this.app.vault.trash(slozka, true);
     try { await this.spustPython("predmety.py", ["--css"]); } catch (e) { /* vzhled se opraví při dalším přidání */ }
     new Notice(T("🗑 Předmět {0} je v koši – vrátit ho můžeš z koše ve Finderu.", nazev), 10000);
+  }
+
+  // ---------- Verze z adresáře Obsidianu: přibalený systém pro trezor ----------
+
+  // Soubory systému pro daný jazyk: kód + systémové poznámky z jazykového balíčku (+ ukázkový předmět)
+  balikProJazyk(jazyk) {
+    const j = JAZYKY[jazyk] ? jazyk : "cs";
+    const soubory = { ...BALIK.soubory };
+    const balicek = JSON.parse(BALIK.soubory[`_Systém/jazyky/${j}.json`].text).soubory;
+    for (const [rel, text] of Object.entries(balicek)) {
+      soubory[rel] = { druh: rel.startsWith("Příklad předmětu/") ? "ukazka" : VZDY_NAHRADIT.includes(rel) ? "kod" : "upravitelne", text };
+    }
+    return soubory;
+  }
+
+  async pythonFunguje() {
+    try { return /Python 3/.test(await spust(PYTHON, ["--version"], { timeout: 15000 })); } catch (e) { return false; }
+  }
+
+  async zkontrolujPribalenySystem() {
+    if (!BALIK) return;
+    if (!this.jeNastaveno()) { new PruvodceModal(this).open(); return; }
+    let ev = {};
+    try { ev = JSON.parse(fs.readFileSync(path.join(this.zaklad, "_Systém", "instalace.json"), "utf8")); } catch (e) { /* starší instalace */ }
+    if (novejsiVerze(BALIK.verze, ev.verze || "0.0.0")) new ObnovaSouboruModal(this, ev.verze || "?").open();
+  }
+
+  zapisEvidenci(soubory) {
+    const otiskTextu = (t) => crypto.createHash("sha256").update(t, "utf8").digest("hex");
+    const evidence = {};
+    for (const [rel, f] of Object.entries(soubory)) {
+      const cil = path.join(this.zaklad, rel);
+      try { if (f.druh !== "ukazka" && fs.readFileSync(cil, "utf8") === f.text) evidence[rel] = otiskTextu(f.text); } catch (e) { /* soubor chybí */ }
+    }
+    fs.writeFileSync(path.join(this.zaklad, "_Systém", "instalace.json"),
+      JSON.stringify({ verze: BALIK.verze, jazyk: JAZYK, soubory: evidence }, null, 1) + "\n");
+  }
+
+  // 🧠 První nastavení trezoru (to, co jinak dělá Instalovat.command) – nic existujícího se nepřepíše
+  async nastavTrezor(v) {
+    const soubory = this.balikProJazyk(v.jazyk);
+    const predmety = (v.predmety || []).map((x) => x.trim()).filter(Boolean);
+    for (const [rel, f] of Object.entries(soubory)) {
+      if (!bezpecnaCesta(rel) || (f.druh === "ukazka" && predmety.length)) continue;
+      const cil = path.join(this.zaklad, rel);
+      if (fs.existsSync(cil)) continue;
+      fs.mkdirSync(path.dirname(cil), { recursive: true });
+      fs.writeFileSync(cil, f.text);
+    }
+    if (!predmety.length) for (const d of ["Příklad předmětu/Poznámky", "Příklad předmětu/Úkoly"]) fs.mkdirSync(path.join(this.zaklad, d), { recursive: true });
+    const nastaveni = { jmeno: v.jmeno, jmeno_soubor: v.jmenoSoubor, uco: v.uco, ai: v.ai, ai_prikaz: v.ai === "jina" ? v.aiPrikaz : "",
+      jazyk: v.jazyk, jazyk_word: v.jazykWord || v.jazyk };
+    fs.writeFileSync(path.join(this.zaklad, "_Systém", "nastaveni.json"), JSON.stringify(nastaveni, null, 2) + "\n");
+    this.nactiJazyk();
+    const sablony = path.join(this.zaklad, this.app.vault.configDir || ".obsidian", "templates.json");
+    if (!fs.existsSync(sablony)) fs.writeFileSync(sablony, JSON.stringify({ folder: "_Systém/Šablony", dateFormat: "YYYY-MM-DD" }, null, 2));
+    try {  // vestavěné funkce Obsidianu, které systém používá (tabulky Bases, šablony, vlastnosti, plátno)
+      for (const id of ["bases", "templates", "properties", "canvas"]) await this.app.internalPlugins?.getPluginById?.(id)?.enable?.(true);
+    } catch (e) { /* zapnout jdou i ručně v Nastavení → Základní pluginy */ }
+    try {
+      for (const css of ["druhy-mozek", "druhy-mozek-predmety"]) this.app.customCss?.setCssEnabledStatus?.(css, true);
+      this.data.predmetyCss = true;
+    } catch (e) { /* vzhled jde zapnout v Nastavení → Vzhled */ }
+    const chyby = [];
+    const krok = async (skript, argumenty) => { try { await spust(PYTHON, [path.join("_Systém", skript), ...argumenty], { cwd: this.zaklad }); } catch (e) { chyby.push(e.message); } };
+    await krok("Word/vytvor_sablonu.py", []);
+    await krok("predmety.py", predmety.length ? ["--pridat", ...predmety] : ["--css"]);
+    await krok("priprav.py", []);
+    this.zapisEvidenci(soubory);
+    delete this.data.otisky;
+    this.zmeneneSoubory();  // výchozí otisky = právě nainstalované soubory (žádné 🛡 hned po instalaci)
+    await this.saveData(this.data);
+    await this.app.workspace.openLinkText(DOMOV, "", false);
+    new Notice(T("🎉 Druhý mozek je nastavený. Návod najdeš v poznámce 01 Návod."), 10000);
+    if (chyby.length) this.chyba(T("Některé kroky se nepovedly: {0}", chyby.join(" | ")), "nastaveni");
+    return chyby;
+  }
+
+  // Po aktualizaci rozšíření z Obsidianu: obnova systémových souborů v trezoru (stejná pravidla jako nastroje/aktualizace.py)
+  async obnovSoubory() {
+    const jazyk = JAZYKY[this.nastaveni().jazyk] ? this.nastaveni().jazyk : "cs";
+    const soubory = this.balikProJazyk(jazyk);
+    const otiskTextu = (t) => crypto.createHash("sha256").update(t, "utf8").digest("hex");
+    let ev = {}, stary = {};
+    try { ev = JSON.parse(fs.readFileSync(path.join(this.zaklad, "_Systém", "instalace.json"), "utf8")); } catch (e) { /* starší instalace */ }
+    try { stary = JSON.parse(fs.readFileSync(path.join(this.zaklad, "_Systém", "jazyky", `${jazyk}.json`), "utf8")).soubory || {}; } catch (e) { /* bez balíčku */ }
+    const evidence = ev.soubory || {};
+    const korenZaloh = path.join(this.zaklad, ".druhy-mozek-zaloha");
+    if (fs.existsSync(korenZaloh) && fs.lstatSync(korenZaloh).isSymbolicLink()) throw new Error(T("Balík nemá očekávanou podobu."));
+    const d = new Date(), nazev = `${d.getFullYear()}-${dv(d.getMonth() + 1)}-${dv(d.getDate())} ${dv(d.getHours())}.${dv(d.getMinutes())}.${dv(d.getSeconds())}`;
+    const zaloha = path.join(korenZaloh, nazev);
+    const odkaz = (c) => { for (let x = c; x.startsWith(this.zaklad + path.sep); x = path.dirname(x)) { try { if (fs.lstatSync(x).isSymbolicLink()) return true; } catch (e) { /* neexistuje */ } } return false; };
+    const v = { nahrazeno: [], nove: [], ponechano: [] };
+    try {
+      for (const [rel, f] of Object.entries(soubory)) {
+        if (f.druh === "ukazka" || !bezpecnaCesta(rel)) continue;
+        const cil = path.join(this.zaklad, rel);
+        if (odkaz(cil)) continue;
+        if (!fs.existsSync(cil)) { fs.mkdirSync(path.dirname(cil), { recursive: true }); fs.writeFileSync(cil, f.text); v.nove.push(rel); continue; }
+        if (f.druh === "uzivatelske") continue;
+        const soucasny = fs.readFileSync(cil, "utf8");
+        if (soucasny === f.text) continue;
+        if (f.druh === "kod" || evidence[rel] === otiskTextu(soucasny) || stary[rel] === soucasny) {
+          fs.mkdirSync(path.dirname(path.join(zaloha, rel)), { recursive: true });
+          fs.copyFileSync(cil, path.join(zaloha, rel));
+          fs.writeFileSync(cil, f.text);
+          v.nahrazeno.push(rel);
+        } else {  // uživatel soubor upravil → nechat, novou verzi uložit vedle
+          const vedle = path.join(path.dirname(cil), path.basename(cil, path.extname(cil)) + PRIPONA_NOVA_VERZE[jazyk] + path.extname(cil));
+          fs.writeFileSync(vedle, f.text);
+          v.ponechano.push(rel);
+        }
+      }
+    } catch (e) {
+      for (const rel of v.nahrazeno) fs.copyFileSync(path.join(zaloha, rel), path.join(this.zaklad, rel));
+      for (const rel of v.nove) { try { fs.unlinkSync(path.join(this.zaklad, rel)); } catch (x) { /* už není */ } }
+      throw e;
+    }
+    if (v.nahrazeno.length || v.nove.length) {
+      this.data.aktualizace.vratit = { slozka: nazev, z: ev.verze || "?", na: BALIK.verze, nove: v.nove,
+        nahrazeno: Object.fromEntries(v.nahrazeno.map((rel) => [rel, otiskSouboru(path.join(zaloha, rel))])) };
+    }
+    this.zapisEvidenci(soubory);
+    // obnovu spustil člověk kliknutím → potvrzené jsou jen soubory shodné s balíkem a soubory rozšíření, které dodal Obsidian
+    this.data.otisky = this.data.otisky || {};
+    for (const [rel, f] of Object.entries(soubory)) { try { if (fs.readFileSync(path.join(this.zaklad, rel), "utf8") === f.text) this.data.otisky[rel] = this.otisk(rel); } catch (e) { /* chybí */ } }
+    for (const n of ["main.js", "manifest.json", "styles.css"]) { const rel = `${this.manifest.dir}/${n}`; this.data.otisky[rel] = this.otisk(rel); }
+    await this.saveData(this.data);
+    try { await this.spustPython("predmety.py", ["--css"]); await this.spustPython("Word/vytvor_sablonu.py", []); } catch (e) { /* zkusí se příště */ }
+    new Notice(T("✅ Soubory v trezoru odpovídají verzi {0}.", BALIK.verze) +
+      (v.ponechano.length ? " " + T("Upravené soubory zůstaly, nová verze je vedle nich: {0}", v.ponechano.join(", ")) : ""), 12000);
+    return v;
   }
 
   // ---------- Hlášení chyb ----------
@@ -473,6 +625,10 @@ module.exports = class DruhyMozek extends Plugin {
   // ---------- Aktualizace ----------
 
   async zkontrolujAktualizace({ automaticky }) {
+    if (DISTRIBUCE === "obsidian") {  // verzi z adresáře aktualizuje Obsidian – žádné vlastní stahování
+      if (!automaticky) new Notice(T("Druhý mozek z adresáře Obsidianu aktualizuje Obsidian: Nastavení → Pluginy třetích stran → Zkontrolovat aktualizace."), 10000);
+      return null;
+    }
     const a = this.data.aktualizace;
     if (automaticky && !a.kontrolovat) return null;
     try {
@@ -642,6 +798,7 @@ module.exports = class DruhyMozek extends Plugin {
   // Názvy bodů se ukládají česky (klíče) a překládají až při zobrazení; podrobnosti se překládají hned.
 
   async kontrola({ automaticky }) {
+    if (BALIK && !this.jeNastaveno()) return;
     const body = [];
     const bod = (nazev, stav, detail = "") => body.push({ nazev, stav, detail });
     const pluginy = this.app.plugins;
@@ -1260,7 +1417,7 @@ class PotvrzeniModal extends Modal {
 
   onOpen() {
     const { contentEl } = this;
-    contentEl.createEl("h3", { text: T("🛡 Potvrdit změny kódu?") });
+    this.titleEl.setText(T("🛡 Potvrdit změny kódu?"));
     contentEl.createEl("p", { text: T("Tyto chráněné soubory se změnily od posledního potvrzení:") });
     const ul = contentEl.createEl("ul");
     for (const z of this.zmenene) ul.createEl("li", { text: z });
@@ -1298,7 +1455,7 @@ class UkolModal extends Modal {
     const n = this.plugin.nastaveni();
     const jazykWord = n.jazyk_word || n.jazyk || "cs";
 
-    contentEl.createEl("h3", { text: this.data.zdroj ? T("📄 Převést práci do šablony KISK") : T("📝 Nový úkol ve Wordu") });
+    this.titleEl.setText(this.data.zdroj ? T("📄 Převést práci do šablony KISK") : T("📝 Nový úkol ve Wordu"));
     if (this.data.zdroj) contentEl.createEl("p", { text: T("Zdroj: {0} (originál zůstane beze změny)", this.data.zdroj), cls: "setting-item-description" });
 
     new Setting(contentEl).setName(T("Předmět")).addDropdown((d) => {
@@ -1361,10 +1518,8 @@ class NastaveniTab extends PluginSettingTab {
     const k = this.koncept;
     if (!k.jazyk_word) k.jazyk_word = k.jazyk || "cs";
 
-    containerEl.createEl("h2", { text: "🧠 Druhý mozek" });
-
     // Jazyk
-    containerEl.createEl("h3", { text: T("🌐 Jazyk") });
+    new Setting(containerEl).setName(T("🌐 Jazyk")).setHeading();
     new Setting(containerEl).setName(T("Jazyk rozhraní"))
       .setDesc(T("Tlačítka, nastavení, Domov, návod, šablony a poznámky od AI. Po uložení se systémové poznámky přeloží (předtím se udělá záloha); tvoje poznámky se nemění."))
       .addDropdown((d) => { for (const [kod, nazev] of Object.entries(JAZYKY)) d.addOption(kod, nazev);
@@ -1375,7 +1530,7 @@ class NastaveniTab extends PluginSettingTab {
         d.setValue(k.jazyk_word).onChange((v) => (k.jazyk_word = v)); });
 
     // AI
-    containerEl.createEl("h3", { text: T("🤖 Práce s AI") });
+    new Setting(containerEl).setName(T("🤖 Práce s AI")).setHeading();
     containerEl.createEl("p", { cls: "setting-item-description", text:
       T("AI můžeš kdykoli přidat, změnit nebo odebrat. Bez AI zmizí tlačítka s AI a vše ostatní (Word, fronta, termíny, plán) funguje dál.") });
     new Setting(containerEl).setName(T("Režim AI")).addDropdown((d) => d
@@ -1395,16 +1550,15 @@ class NastaveniTab extends PluginSettingTab {
       new Setting(containerEl).setName(T("Příkaz AI"))
         .setDesc(T("Musí obsahovat {prompt} (na jeho místo se vloží zadání). Povolené jsou jen písmena, čísla, mezery a . _ / = : -"))
         .addText((t) => t.setPlaceholder("gemini -i {prompt}").setValue(k.ai_prikaz || "").onChange((v) => (k.ai_prikaz = v.trim())));
-      const varovani = containerEl.createEl("p", { cls: "mod-warning", text:
+      containerEl.createEl("p", { cls: "mod-warning druhy-mozek-varovani", text:
         T("⚠️ Bezpečnostní pravidla z .claude/settings.json platí jen pro Claude Code. U jiné AI nech zapnuté potvrzování příkazů a nikdy nepoužívej režim bez potvrzování (např. --yolo, --dangerously-…).") });
-      varovani.style.marginTop = "4px";
     } else {
       containerEl.createEl("p", { cls: "setting-item-description", text:
         T("Ruční režim: poznámky píšeš sám ze šablon (Cmd+P → Vložit šablonu), zpracované materiály odškrtneš tlačítkem ✔️ Označit materiál jako zpracovaný. Nic se nikam neposílá.") });
     }
 
     // Záloha (ukládá se hned)
-    containerEl.createEl("h3", { text: T("💾 Automatická záloha") });
+    new Setting(containerEl).setName(T("💾 Automatická záloha")).setHeading();
     const z = this.plugin.data.zaloha;
     const ulozZalohu = async () => { await this.plugin.saveData(this.plugin.data); };
     containerEl.createEl("p", { cls: "setting-item-description", text:
@@ -1448,7 +1602,7 @@ class NastaveniTab extends PluginSettingTab {
       .onClick(async () => { await this.plugin.zalohuj({ tise: false }); this.display(); }));
 
     // Předměty (mění se hned)
-    containerEl.createEl("h3", { text: T("📚 Předměty") });
+    new Setting(containerEl).setName(T("📚 Předměty")).setHeading();
     containerEl.createEl("p", { cls: "setting-item-description", text:
       T("Podle předmětů se řídí Domov, termíny, výběr předmětu u úkolů ve Wordu, plán a levý panel.") });
     const predmety = this.plugin.predmety();
@@ -1472,7 +1626,7 @@ class NastaveniTab extends PluginSettingTab {
     }
 
     // Připomínky (ukládá se hned)
-    containerEl.createEl("h3", { text: T("⏰ Připomínky termínů") });
+    new Setting(containerEl).setName(T("⏰ Připomínky termínů")).setHeading();
     new Setting(containerEl).setName(T("Připomínat termíny"))
       .setDesc(T("Jednou denně při spuštění Obsidianu upozorní na úkoly a zkoušky do 3 dnů a na ty po termínu."))
       .addToggle((t) => t.setValue(this.plugin.data.pripominky.zapnuto)
@@ -1480,24 +1634,35 @@ class NastaveniTab extends PluginSettingTab {
       .addButton((b) => b.setButtonText(T("⏰ Ukázat teď")).onClick(() => this.plugin.pripomenTerminy({ vzdy: true })));
 
     // Hlášení chyb
-    containerEl.createEl("h3", { text: T("🐞 Chyba nebo nápad?") });
+    new Setting(containerEl).setName(T("🐞 Chyba nebo nápad?")).setHeading();
     new Setting(containerEl).setName(T("Nahlásit chybu nebo nápad"))
       .setDesc(T("Otevře okno, kde napíšeš, co se stalo. Technické údaje jsou bez osobních dat a uvidíš je předem; nic se neodešle samo."))
       .addButton((b) => b.setButtonText(T("🐞 Nahlásit")).onClick(() => new HlaseniModal(this.plugin).open()));
 
     // Aktualizace (ukládá se hned)
-    containerEl.createEl("h3", { text: T("🔄 Aktualizace") });
+    new Setting(containerEl).setName(T("🔄 Aktualizace")).setHeading();
     const a = this.plugin.data.aktualizace;
-    const novejsi = a.nejnovejsi && novejsiVerze(a.nejnovejsi.verze, this.plugin.manifest.version);
+    if (DISTRIBUCE === "obsidian") {
+      containerEl.createEl("p", { cls: "setting-item-description", text:
+        T("Nainstalovaná verze: {0}.", this.plugin.manifest.version) + " " +
+        T("Druhý mozek z adresáře Obsidianu aktualizuje Obsidian: Nastavení → Pluginy třetích stran → Zkontrolovat aktualizace.") });
+      new Setting(containerEl).setName(T("Obnovit soubory v trezoru"))
+        .setDesc(T("Po aktualizaci rozšíření srovná skripty, šablony a systémové poznámky s novou verzí. Upravené poznámky zůstanou."))
+        .addButton((b) => b.setButtonText(T("🔄 Obnovit")).onClick(async () => {
+          try { await this.plugin.obnovSoubory(); } catch (e) { this.plugin.chyba(T("Nepodařilo se: {0}", e.message), "obnova"); }
+          this.display();
+        }));
+    }
+    const novejsi = DISTRIBUCE === "github" && a.nejnovejsi && novejsiVerze(a.nejnovejsi.verze, this.plugin.manifest.version);
     containerEl.createEl("p", { cls: "setting-item-description", text:
       T("Nainstalovaná verze: {0}.", this.plugin.manifest.version) + " " +
       (a.nejnovejsi ? T("Nejnovější na GitHubu: {0}.", a.nejnovejsi.verze) : "") + " " +
       (a.posledni ? T("Zkontrolováno: {0}.", kdy(a.posledni)) : "") +
       (a.chyba ? " " + T("⚠️ Poslední pokus selhal: {0}", a.chyba) : "") });
-    new Setting(containerEl).setName(T("Hlídat nové verze"))
+    if (DISTRIBUCE === "github") new Setting(containerEl).setName(T("Hlídat nové verze"))
       .setDesc(T("Jednou denně se zeptá GitHubu na číslo poslední verze – nic se neodesílá a nic se neinstaluje samo. Když vyjde nová, nabídne seznam změn a stažení."))
       .addToggle((t) => t.setValue(a.kontrolovat).onChange(async (v) => { a.kontrolovat = v; await this.plugin.saveData(this.plugin.data); }));
-    new Setting(containerEl)
+    if (DISTRIBUCE === "github") new Setting(containerEl)
       .addButton((b) => b.setButtonText(T("🔄 Zkontrolovat teď"))
         .onClick(async () => { await this.plugin.zkontrolujAktualizace({ automaticky: false }); this.display(); }))
       .then((st) => { if (novejsi) st.addButton((b) => b.setButtonText(T("⬇️ Aktualizovat na {0}", a.nejnovejsi.verze)).setCta()
@@ -1510,7 +1675,7 @@ class NastaveniTab extends PluginSettingTab {
     }
 
     // Osobní údaje
-    containerEl.createEl("h3", { text: T("👤 Osobní údaje (záhlaví prací ve Wordu)") });
+    new Setting(containerEl).setName(T("👤 Osobní údaje (záhlaví prací ve Wordu)")).setHeading();
     new Setting(containerEl).setName(T("Jméno a příjmení")).addText((t) => t.setValue(k.jmeno || "").onChange((v) => (k.jmeno = v.trim())));
     new Setting(containerEl).setName(T("Jméno v názvu souborů")).setDesc(T("Jak odevzdáváš do ISu, obvykle Příjmení Jméno."))
       .addText((t) => t.setValue(k.jmeno_soubor || "").onChange((v) => (k.jmeno_soubor = v.trim())));
@@ -1549,7 +1714,7 @@ class PredmetNovyModal extends Modal {
 
   onOpen() {
     const { contentEl } = this;
-    contentEl.createEl("h3", { text: T("📚 Přidat předmět") });
+    this.titleEl.setText(T("📚 Přidat předmět"));
     new Setting(contentEl).setName(T("Kód předmětu")).setDesc(T("Jak je v ISu, např. ISKB02. Může zůstat prázdný."))
       .addText((t) => t.setPlaceholder("ISKB02").onChange((v) => (this.kod = v.trim())));
     new Setting(contentEl).setName(T("Název předmětu")).setDesc(T("Podle něj se pojmenuje složka i přehled předmětu."))
@@ -1586,7 +1751,7 @@ class PredmetOdebratModal extends Modal {
 
   onOpen() {
     const { contentEl } = this;
-    contentEl.createEl("h3", { text: T("🗑 Odebrat předmět {0}?", this.nazev) });
+    this.titleEl.setText(T("🗑 Odebrat předmět {0}?", this.nazev));
     contentEl.createEl("p", { text: T("Celá složka předmětu – materiály, poznámky i úkoly – se přesune do koše v macOS. Dokud koš nevysypeš, můžeš ji odtamtud vrátit.") });
     new Setting(contentEl)
       .addButton((b) => b.setButtonText(T("Zrušit")).onClick(() => this.close()))
@@ -1612,7 +1777,7 @@ class AktualizaceModal extends Modal {
   onOpen() {
     const { contentEl } = this;
     const { verze, stranka, zip } = this.nova;
-    contentEl.createEl("h3", { text: T("🆕 Je dostupná nová verze druhého mozku") });
+    this.titleEl.setText(T("🆕 Je dostupná nová verze druhého mozku"));
     contentEl.createEl("p", { text: T("Verze {0} (máš {1}).", verze, this.plugin.manifest.version) });
     contentEl.createEl("p", { cls: "setting-item-description", text:
       T("Stáhne se z GitHubu a ověří. Pak už jen klikneš na Instalovat (nebo Zrušit instalaci). Tvoje poznámky, materiály, předměty a nastavení zůstanou; před instalací se udělá záloha a aktualizaci jde vrátit.") });
@@ -1626,6 +1791,100 @@ class AktualizaceModal extends Modal {
       }));
     const rucne = contentEl.createEl("p", { cls: "setting-item-description" });
     rucne.createEl("a", { text: T("Nebo stáhnout ručně a nainstalovat přes Instalovat.command"), href: zip });
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
+
+class PruvodceModal extends Modal {
+  constructor(plugin) {
+    super(plugin.app);
+    this.plugin = plugin;
+    this.v = { jazyk: "cs", jazykWord: "cs", jmeno: "", jmenoSoubor: "", uco: "", predmety: [], ai: "zadna", aiPrikaz: "" };
+    this.python = null;
+  }
+
+  async onOpen() {
+    this.vykresli();
+    this.python = await this.plugin.pythonFunguje();
+    this.vykresli();
+  }
+
+  vykresli() {
+    const { contentEl } = this;
+    const v = this.v;
+    contentEl.empty();
+    this.titleEl.setText(T("🧠 Nastavit druhý mozek v tomto trezoru"));
+    contentEl.createEl("p", { cls: "setting-item-description", text:
+      T("Založí Domov, návod, šablony, předměty a skripty. Nic, co už v trezoru máš, se nepřepíše. Všechno změníš později v Nastavení → Druhý mozek.") });
+    new Setting(contentEl).setName(T("Jazyk")).addDropdown((d) => { for (const [k, n] of Object.entries(JAZYKY)) d.addOption(k, n);
+      d.setValue(v.jazyk).onChange((x) => { v.jazyk = x; v.jazykWord = x; this.plugin.nastavJazykRozhrani(x); this.vykresli(); }); });
+    new Setting(contentEl).setName(T("Jazyk dokumentů ve Wordu")).addDropdown((d) => { for (const [k, n] of Object.entries(JAZYKY)) d.addOption(k, n);
+      d.setValue(v.jazykWord).onChange((x) => (v.jazykWord = x)); });
+    new Setting(contentEl).setName(T("Jméno a příjmení")).addText((t) => t.setValue(v.jmeno).onChange((x) => {
+      v.jmeno = x.trim();
+      const casti = v.jmeno.split(/\s+/);
+      if (!this.jmenoRucne) v.jmenoSoubor = casti.length > 1 ? [casti.at(-1), ...casti.slice(0, -1)].join(" ") : v.jmeno;
+    }));
+    new Setting(contentEl).setName(T("Jméno v názvu souborů")).setDesc(T("Jak odevzdáváš do ISu, obvykle Příjmení Jméno. Prázdné = podle jména."))
+      .addText((t) => t.setValue("").onChange((x) => { this.jmenoRucne = !!x.trim(); if (x.trim()) v.jmenoSoubor = x.trim(); }));
+    new Setting(contentEl).setName("UČO").addText((t) => t.setValue(v.uco).onChange((x) => (v.uco = x.trim())));
+    contentEl.createEl("div", { text: T("Tvoje předměty – každý na samostatný řádek ve tvaru KÓD Název (např. ISKB02 Úvod do knihovnictví). Prázdné = ukázkový předmět."), cls: "setting-item-name" });
+    const ta = contentEl.createEl("textarea", { cls: "druhy-mozek-hlaseni" });
+    ta.rows = 5;
+    ta.value = v.predmety.join("\n");
+    ta.addEventListener("input", () => (v.predmety = ta.value.split("\n").map((x) => x.trim()).filter(Boolean)));
+    new Setting(contentEl).setName(T("Režim AI")).addDropdown((d) => d
+      .addOption("zadna", T("Bez AI – vše ručně")).addOption("claude", T("Claude Code (doporučeno)")).addOption("jina", T("Jiná AI v Terminálu (Gemini CLI, Codex…)"))
+      .setValue(v.ai).onChange((x) => { v.ai = x; this.vykresli(); }));
+    if (v.ai === "jina") new Setting(contentEl).setName(T("Příkaz AI"))
+      .setDesc(T("Musí obsahovat {prompt} (na jeho místo se vloží zadání). Povolené jsou jen písmena, čísla, mezery a . _ / = : -"))
+      .addText((t) => t.setPlaceholder("gemini -i {prompt}").setValue(v.aiPrikaz).onChange((x) => (v.aiPrikaz = x.trim())));
+    const py = contentEl.createEl("p", { cls: "setting-item-description" });
+    if (this.python === null) py.setText(T("⏳ Kontroluji Python 3…"));
+    else if (this.python) py.setText(T("✅ Python 3 je nainstalovaný."));
+    else {
+      py.setText(T("❌ Chybí Python 3 – druhý mozek ho potřebuje (fronta, Word, přehledy). Nainstaluj ho z python.org a klikni Zkontrolovat znovu."));
+      new Setting(contentEl)
+        .addButton((b) => b.setButtonText(T("Otevřít python.org")).onClick(() => window.open("https://www.python.org/downloads/")))
+        .addButton((b) => b.setButtonText(T("Zkontrolovat znovu")).onClick(async () => { this.python = await this.plugin.pythonFunguje(); this.vykresli(); }));
+    }
+    new Setting(contentEl)
+      .addButton((b) => b.setButtonText(T("Teď ne")).onClick(() => this.close()))
+      .addButton((b) => b.setButtonText(T("🧠 Nastavit")).setCta().setDisabled(!this.python).onClick(async () => {
+        if (!v.jmeno) { new Notice(T("Vyplň jméno i jméno v názvu souborů.")); return; }
+        if (!/^[0-9]{4,7}$/.test(v.uco)) { new Notice(T("UČO má být číslo (4–7 číslic).")); return; }
+        if (v.ai === "jina" && !BEZPECNY_AI_PRIKAZ.test(v.aiPrikaz)) { new Notice(T("Příkaz AI je neplatný – viz popis u pole.")); return; }
+        v.jmenoSoubor = v.jmenoSoubor || v.jmeno;
+        this.close();
+        await this.plugin.nastavTrezor(v);
+      }));
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
+
+class ObnovaSouboruModal extends Modal {
+  constructor(plugin, puvodni) {
+    super(plugin.app);
+    this.plugin = plugin;
+    this.puvodni = puvodni;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    this.titleEl.setText(T("🔄 Druhý mozek byl aktualizován na verzi {0}", BALIK.verze));
+    contentEl.createEl("p", { text: T("Obnovit i soubory v trezoru (skripty, šablony, systémové poznámky)? Předtím se zazálohují; upravené poznámky zůstanou a nová verze se uloží vedle. Tvoje poznámky, materiály a nastavení se nemění.") });
+    new Setting(contentEl)
+      .addButton((b) => b.setButtonText(T("Teď ne")).onClick(() => this.close()))
+      .addButton((b) => b.setButtonText(T("🔄 Obnovit")).setCta().onClick(async () => {
+        this.close();
+        try { await this.plugin.obnovSoubory(); } catch (e) { this.plugin.chyba(T("Nepodařilo se: {0}", e.message), "obnova"); }
+      }));
   }
 
   onClose() {
@@ -1654,7 +1913,7 @@ class HlaseniModal extends Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.createEl("h3", { text: T("🐞 Nahlásit chybu nebo nápad") });
+    this.titleEl.setText(T("🐞 Nahlásit chybu nebo nápad"));
     contentEl.createEl("p", { cls: "setting-item-description", text:
       T("Nic se neodešle samo. Vidíš všechno, co se pošle, a můžeš to upravit. Neposílej hesla ani obsah svých poznámek.") });
     const pole = (nazev, hodnota, nastav, radku = 4) => {
@@ -1723,7 +1982,7 @@ class KartickyModal extends Modal {
   vykresli() {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.createEl("h3", { text: T("🃏 Opakovat kartičky") });
+    this.titleEl.setText(T("🃏 Opakovat kartičky"));
     if (this.stav === "vyber") {
       if (!this.vsechny.length) {
         contentEl.createEl("p", { text: T("Zatím nemáš žádné kartičky. Piš je do poznámek jako řádek Otázka::Odpověď.") });
@@ -1790,7 +2049,7 @@ class CitaceModal extends Modal {
   vykresli() {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.createEl("h3", { text: T("📚 Citace zdroje (ČSN ISO 690)") });
+    this.titleEl.setText(T("📚 Citace zdroje (ČSN ISO 690)"));
     const popisky = {
       autori: [T("Autoři"), T("Příjmení, Jméno; další autor… – nebo název organizace")], nazev: [T("Název")], podnazev: [T("Podnázev")],
       vydani: [T("Vydání"), T("Číslo vydání, např. 2 (první vydání se neuvádí)")], misto: [T("Místo vydání")], nakladatel: [T("Nakladatel / vydavatel")],
@@ -1850,7 +2109,7 @@ class InstalaceModal extends Modal {
   vykresli() {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.createEl("h3", { text: T("🔄 Aktualizace na verzi {0}", this.nova.verze) });
+    this.titleEl.setText(T("🔄 Aktualizace na verzi {0}", this.nova.verze));
     const poradi = ["stahuji", "overuji", "pripraveno"];
     const kroky = contentEl.createEl("ul", { cls: "druhy-mozek-kroky" });
     const ikona = (k) => this.stav === "chyba" ? (poradi.indexOf(k) < poradi.indexOf(this.posledni || "stahuji") ? "✅" : "⏸")
@@ -1918,7 +2177,7 @@ class VratitModal extends Modal {
   onOpen() {
     const { contentEl } = this;
     const { z, na, nahrazeno = [], nove = [] } = this.aktualizace;
-    contentEl.createEl("h3", { text: T("↩️ Vrátit aktualizaci {0} → {1}?", z, na) });
+    this.titleEl.setText(T("↩️ Vrátit aktualizaci {0} → {1}?", z, na));
     contentEl.createEl("p", { text: T("Vrátí se {0} souborů systému do stavu před aktualizací; {1} nových souborů se přesune do zálohy. Poznámky, materiály, předměty a nastavení se nemění.", nahrazeno.length, nove.length) });
     new Setting(contentEl)
       .addButton((b) => b.setButtonText(T("Zrušit")).onClick(() => this.close()))
@@ -1944,7 +2203,7 @@ class JazykModal extends Modal {
 
   onOpen() {
     const { contentEl } = this;
-    contentEl.createEl("h3", { text: `🌐 ${JAZYKY[this.jazyk]}` });
+    this.titleEl.setText(`🌐 ${JAZYKY[this.jazyk]}`);
     contentEl.createEl("p", { text: T("Přepnout jazyk rozhraní na {0}?", JAZYKY[this.jazyk]) });
     contentEl.createEl("p", { cls: "setting-item-description", text:
       T("Přeloží se tlačítka, nastavení a systémové poznámky: Domov, Návod, šablony, rozcestníky a tabulky. Tyto poznámky se přepíšou – pokud jsi do nich psal, najdeš původní verzi v záloze, která se udělá předem. Tvoje vlastní poznámky, úkoly a materiály se nezmění.") });
@@ -1970,7 +2229,7 @@ class ZmenaZalohyModal extends Modal {
     const { contentEl } = this;
     const stara = this.plugin.data.zaloha.slozka;
     const pocet = stara ? this.plugin.pocetZaloh(stara) : 0;
-    contentEl.createEl("h3", { text: T("💾 Změnit místo zálohy") });
+    this.titleEl.setText(T("💾 Změnit místo zálohy"));
     contentEl.createEl("p", { text: T("Nové zálohy se budou ukládat do:") });
     contentEl.createEl("p", { text: this.nova, cls: "setting-item-description" });
     const hotovo = async (smazat) => { this.close(); await this.plugin.zmenSlozkuZalohy(this.nova, smazat); this.poZmene(); };
