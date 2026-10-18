@@ -47,8 +47,14 @@ def vlastnost(md, klic):
     return m.group(1).strip().strip('"') if m else ""
 
 
-def bezpecne(nazev):
-    return re.sub(r'[\\/:*?"<>|#^\[\]]', "-", nazev).strip()
+def bez_ridicich(text):
+    return re.sub(r"[\x00-\x1f\x7f]+", " ", text).strip()
+
+
+def bezpecne(nazev, bajtu=200):
+    """Název souboru: bez zakázaných a řídicích znaků, nejvýš `bajtu` v UTF-8 (macOS dovolí 255 i s příponou)."""
+    nazev = bez_ridicich(re.sub(r'[\\/:*?"<>|#^\[\]]', "-", nazev))
+    return nazev.encode("utf8")[:bajtu].decode("utf8", "ignore").strip()
 
 
 def atributy(tag):
@@ -170,7 +176,8 @@ def main():
     md = prehled.read_text()
     kod = vlastnost(md, "kod")
     oficialni = vlastnost(md, "nazev") or arg.predmet
-    nazev = bezpecne(arg.nazev)
+    arg.nazev, arg.typ = bez_ridicich(arg.nazev), bez_ridicich(arg.typ)
+    nazev = bezpecne(arg.nazev, 150)
     if not nazev:
         sys.exit(T["chyba_nazev"])
 
@@ -208,7 +215,10 @@ def main():
         soubory[cast] = x.encode("utf8")
 
     if arg.zdroj:
-        vloz_dokument(soubory, arg.zdroj)
+        try:
+            vloz_dokument(soubory, arg.zdroj)
+        except (OSError, zipfile.BadZipFile, KeyError, ValueError, UnicodeDecodeError):
+            sys.exit(T["chyba_zdroj"].format(p=bez_ridicich(arg.zdroj)))
 
     cil.parent.mkdir(exist_ok=True)
     with zipfile.ZipFile(cil, "w", zipfile.ZIP_DEFLATED) as z:

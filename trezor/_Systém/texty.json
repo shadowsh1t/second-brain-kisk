@@ -31,6 +31,7 @@
     "chyba_existuje": "Soubor už existuje, nepřepisuju ho: {p}",
     "chyba_velky": "Zdrojový dokument je po rozbalení podezřele velký – převod z bezpečnostních důvodů odmítám.",
     "chyba_mimo": "Dokument odkazuje mimo své části ({p}) – převod z bezpečnostních důvodů odmítám.",
+    "chyba_zdroj": "Dokument {p} se nepodařilo otevřít – neexistuje, nebo to není dokument Wordu (.docx).",
     "chyba_obrazek": "V dokumentu chybí obrázek {p} – soubor je poškozený.",
     "chyba_prvek": "Dokument obsahuje prvek, který převod nepodporuje ({p}) – vlož ho do šablony ručně, jinak by se výsledný soubor poškodil.",
 
@@ -141,6 +142,7 @@
     "chyba_existuje": "Súbor už existuje, neprepíšem ho: {p}",
     "chyba_velky": "Zdrojový dokument je po rozbalení podozrivo veľký – prevod z bezpečnostných dôvodov odmietam.",
     "chyba_mimo": "Dokument odkazuje mimo svoje časti ({p}) – prevod z bezpečnostných dôvodov odmietam.",
+    "chyba_zdroj": "Dokument {p} sa nepodarilo otvoriť – neexistuje alebo to nie je dokument Wordu (.docx).",
     "chyba_obrazek": "V dokumente chýba obrázok {p} – súbor je poškodený.",
     "chyba_prvek": "Dokument obsahuje prvok, ktorý prevod nepodporuje ({p}) – vlož ho do šablóny ručne, inak by sa výsledný súbor poškodil.",
 
@@ -251,6 +253,7 @@
     "chyba_existuje": "The file already exists, I won't overwrite it: {p}",
     "chyba_velky": "The source document is suspiciously large when unpacked – conversion refused for security reasons.",
     "chyba_mimo": "The document points outside its own parts ({p}) – conversion refused for security reasons.",
+    "chyba_zdroj": "Couldn't open the document {p} – it doesn't exist or isn't a Word document (.docx).",
     "chyba_obrazek": "Image {p} is missing in the document – the file is damaged.",
     "chyba_prvek": "The document contains an element the conversion doesn't support ({p}) – insert it into the template manually, otherwise the result would be damaged.",
 
@@ -361,6 +364,7 @@
     "chyba_existuje": "Файл уже існує, не перезаписую його: {p}",
     "chyba_velky": "Вихідний документ після розпакування підозріло великий – з міркувань безпеки перенесення відхилено.",
     "chyba_mimo": "Документ посилається за межі своїх частин ({p}) – з міркувань безпеки перенесення відхилено.",
+    "chyba_zdroj": "Не вдалося відкрити документ {p} – він не існує або це не документ Word (.docx).",
     "chyba_obrazek": "У документі бракує зображення {p} – файл пошкоджено.",
     "chyba_prvek": "Документ містить елемент, який перенесення не підтримує ({p}) – встав його в шаблон вручну, інакше результат буде пошкоджено.",
 

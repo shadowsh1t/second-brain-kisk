@@ -3,6 +3,13 @@
 All notable changes to Second Brain for KISK. The newest version is at the top.
 When a new version is released, Obsidian offers it under **🆕 A new version of Second Brain is available** with a link to this list.
 
+## 1.0.6 – 2026-10-18
+
+- Fixed: courses whose names contain diacritics (e.g. *Úvod do knihovnictví*) now get the orange bar and the course code in the left panel too – before, only names without diacritics did, because macOS reports folder names in a different Unicode form than Obsidian uses.
+- Fixed: a material with a line break in its name no longer breaks the queue on every following run.
+- Fixed: a new assignment with control characters, a line break or a very long title (or such a UČO/name in the settings) now gets a clean, shortened Word file name instead of failing; a missing or invalid source document for conversion shows a clear message.
+- Fixed: a citation with unusual characters, empty arguments of the overview script, an invalid number of days or file path in the queue script, and `nastaveni.json` that is not an object no longer crash the scripts – they show a message or carry on with default settings.
+
 ## 1.0.5 – 2026-10-18
 
 - **Changing the language keeps your edits** – system notes you have edited (Home, guide, templates) stay and the translation is saved next to them with “(new version)”; Inbox, Concepts and Overviews with your own content are not touched. Replaced files are backed up to the hidden `.druhy-mozek-zaloha` folder first, even when automatic backup is off. Before, the language switch overwrote them.

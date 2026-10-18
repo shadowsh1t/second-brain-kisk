@@ -14,6 +14,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 TREZOR = Path(os.environ.get("TREZOR") or Path(__file__).resolve().parent.parent)
@@ -31,9 +32,10 @@ SEMESTR = {"cs": ("podzim", "jaro"), "sk": ("jeseň", "jar"), "en": ("autumn", "
 
 def nastaveni():
     try:
-        return json.loads(NASTAVENI.read_text(encoding="utf8"))
+        data = json.loads(NASTAVENI.read_text(encoding="utf8"))
     except Exception:
         return {}
+    return data if isinstance(data, dict) else {}  # pole nebo číslo místo objektu = jako bez nastavení
 
 
 JAZYK = nastaveni().get("jazyk") if nastaveni().get("jazyk") in SEMESTR else "cs"
@@ -68,7 +70,9 @@ def seznam():
         if d.is_dir() and not d.name.startswith((".", "_")) and prehled.is_file():
             text = prehled.read_text(encoding="utf8", errors="ignore")
             if vlastnost(text, "typ") == "predmet":
-                vysledek.append({"nazev": d.name, "kod": vlastnost(text, "kod")})
+                # NFC: macOS/OneDrive vrací názvy rozložené (NFD), Obsidian v data-path složené – jinak CSS nesedí
+                vysledek.append({"nazev": unicodedata.normalize("NFC", d.name),
+                                 "kod": unicodedata.normalize("NFC", vlastnost(text, "kod"))})
     return sorted(vysledek, key=lambda p: (p["kod"] or "~", p["nazev"]))
 
 

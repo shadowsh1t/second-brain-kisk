@@ -94,7 +94,7 @@ def poznamka(material):
     nastav = {"predmet": json.dumps(f"[[{predmet}]]", ensure_ascii=False), "kod": kod,
               "datum": DNES.isoformat(), "zdroj": json.dumps(f"[[{material}|{zdroj.name}]]", ensure_ascii=False)}
     for k, v in nastav.items():
-        hlava = re.sub(rf"^{k}:.*$", f"{k}: {v}", hlava, flags=re.M)
+        hlava = re.sub(rf"^{k}:.*$", lambda _: f"{k}: {v}", hlava, flags=re.M)  # lambda: \ v textu není escape
     telo = telo.replace("{{title}}", jmeno).replace("{{date}}", DNES.isoformat())
     cil = slozka / f"{jmeno}.md"
     cil.write_text(f"---{hlava}---{telo}", encoding="utf8")
@@ -279,7 +279,7 @@ def citace(d):
 
 def do_nazvu(text, delka):
     """Text do názvu souboru: bez lomítek, řídicích znaků a znaků, které Obsidian v názvu nesnese; nezačíná tečkou."""
-    text = re.sub(r'[/\\:*?"<>|#^\[\]\x00-\x1f]', "-", str(text or ""))
+    text = re.sub(r'[/\\:*?"<>|#^\[\]\x00-\x1f\x7f]', "-", str(text or ""))
     return text[:delka].strip().lstrip(".").strip()
 
 
@@ -295,8 +295,10 @@ def citace_poznamka(data):
     if not cil.exists():
         sablona = (TREZOR / "_Systém" / "Šablony" / "Zdroj.md").read_text(encoding="utf8")
         hlava, telo = sablona.split("---", 2)[1:]
-        hlava = re.sub(r"^autor:.*$", "autor: " + json.dumps(data.get("autori") or "", ensure_ascii=False), hlava, flags=re.M)
-        hlava = re.sub(r"^odkaz:.*$", "odkaz: " + json.dumps(data.get("url") or "", ensure_ascii=False), hlava, flags=re.M)
+        autor = "autor: " + json.dumps(data.get("autori") or "", ensure_ascii=False)  # \u0001 apod. → přes lambda,
+        odkaz = "odkaz: " + json.dumps(data.get("url") or "", ensure_ascii=False)     # jinak re.PatternError
+        hlava = re.sub(r"^autor:.*$", lambda _: autor, hlava, flags=re.M)
+        hlava = re.sub(r"^odkaz:.*$", lambda _: odkaz, hlava, flags=re.M)
         hlava = hlava.rstrip("\n") + "\ncitace: " + json.dumps(c, ensure_ascii=False) + "\n"
         telo = telo.replace("{{title}}", titul, 1)
         prvni_nadpis = telo.index("\n", telo.index("# ")) + 1
@@ -317,15 +319,15 @@ if __name__ == "__main__":
     g.add_argument("--kalendar", action="store_true")
     g.add_argument("--citace", metavar="JSON")
     arg = a.parse_args()
-    if arg.poznamka:
+    if arg.poznamka is not None:  # i prázdný argument – jinak by spadl do --citace
         poznamka(arg.poznamka)
     elif arg.tyden:
         tyden()
-    elif arg.zkouska:
+    elif arg.zkouska is not None:
         zkouska(P.nfc(arg.zkouska))
     elif arg.kalendar:
         kalendar()
-    else:
+    elif arg.citace is not None:
         try:
             data = json.loads(arg.citace)
         except ValueError:

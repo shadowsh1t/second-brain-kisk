@@ -448,9 +448,10 @@ def extrahuj(cesta, info, slozka):
 
 def nastaveni():
     try:
-        return json.loads(NASTAVENI.read_text())
+        data = json.loads(NASTAVENI.read_text())
     except Exception:
         return {}
+    return data if isinstance(data, dict) else {}  # pole nebo číslo místo objektu = jako bez nastavení
 
 
 def texty():
@@ -461,7 +462,7 @@ def texty():
     except Exception:
         pass
     data = json.loads((SYS / "texty.json").read_text(encoding="utf8"))
-    return {**data["cs"], **data.get(jazyk, {})}
+    return {**data["cs"], **data.get(jazyk if isinstance(jazyk, str) else "cs", {})}
 
 
 def podpis(p):
@@ -494,10 +495,10 @@ def materialy():
 
 def oznac(cesta, stav):
     reg = nacti_registr()
-    rel = nfc(str(Path(cesta).resolve().relative_to(TREZOR))) if Path(cesta).is_absolute() else nfc(cesta)
-    p = TREZOR / rel
-    if not p.exists():
-        sys.exit(f"Soubor neexistuje: {rel}")
+    koren, p = TREZOR.resolve(), (TREZOR / cesta).resolve()  # absolutní cesta TREZOR nahradí
+    if not cesta.strip() or not p.is_relative_to(koren) or not p.is_file():  # složka, prázdná nebo cesta ven
+        sys.exit(f"Soubor v trezoru neexistuje: {cesta!r}")
+    rel = nfc(str(p.relative_to(koren)))
     reg[rel] = {"otisk": otisk(p), "stav": stav, "datum": date.today().isoformat(), **podpis(p)}
     uloz_registr(reg)
     print(f"{stav}: {rel}")
@@ -542,13 +543,14 @@ def prehled():
             except Exception as e:  # poškozený nebo zamčený soubor
                 bloky, typ = [], "chyba: " + re.sub(r"[\s|]+", " ", str(e))[:200]
             text, odstraneno = vycisti(bloky)
-            cil.write_text(f"<!-- zdroj: {rel} | typ: {typ} | bloků: {len(bloky)} | "
+            zdroj = re.sub(r"[\x00-\x1f\x7f|]", " ", rel)  # nový řádek v názvu by rozbil hlavičku
+            cil.write_text(f"<!-- zdroj: {zdroj} | typ: {typ} | bloků: {len(bloky)} | "
                            f"odstraněno opakujících se řádků: {odstraneno} | cache: {CACHE_VERZE} | ocr: {info['ocr']} | "
                            f"obrazove: {','.join(map(str, info['obrazove']))}"
                            + (" | ocr_odlozeno: 1" if info["odlozeno"] else "") + f" -->\n\n{text}\n")
         text = cil.read_text()
         hlava = text.split("\n", 1)[0]
-        typ = re.search(r"typ: ([^|]+)", hlava).group(1).strip()
+        typ = re.search(r"\| typ: ([^|]+)", hlava).group(1).strip()
         bloku = int(re.search(r"bloků: (\d+)", hlava).group(1))
         ocr = int(re.search(r"\| ocr: (\d+)", hlava).group(1))
         obrazove = [int(x) for x in re.search(r"\| obrazove: ([\d,]*)", hlava).group(1).split(",") if x]
@@ -688,6 +690,8 @@ if __name__ == "__main__":
     elif len(sys.argv) == 4 and sys.argv[1] == "--presun":
         presun(sys.argv[2], sys.argv[3])
     elif len(sys.argv) == 3 and sys.argv[1] == "--zmenene":
+        if not (sys.argv[2].isascii() and sys.argv[2].isdigit()):
+            sys.exit(f"Počet dní musí být celé číslo: {sys.argv[2]!r}")
         zmenene(int(sys.argv[2]))
     elif len(sys.argv) == 2 and sys.argv[1] == "--ukoly":
         ukoly()

@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import unittest
 import zipfile
 from pathlib import Path
@@ -247,6 +248,18 @@ class Trezor(unittest.TestCase):
         (self.t / "_Systém/nastaveni.json").write_text(json.dumps({**nastaveni, "jazyk": "en"}))
         self.spust("_Systém/predmety.py", "--pridat", "ISKB04 Academic Writing")
         self.assertIn("## About the course", (self.t / "Academic Writing/Academic Writing.md").read_text())
+
+    def test_predmety_s_diakritikou_v_nfd(self):
+        # macOS/OneDrive vrací názvy složek rozložené (NFD), Obsidian má v data-path složené (NFC)
+        nazev = unicodedata.normalize("NFD", "Úvod do knihovnictví")
+        (self.t / nazev).mkdir()
+        (self.t / nazev / f"{nazev}.md").write_text("---\ntyp: predmet\nkod: ISKB02\n---\n")
+        self.spust("_Systém/predmety.py", "--css")
+        styl = (self.t / ".obsidian/snippets/druhy-mozek-predmety.css").read_text()
+        self.assertIn('[data-path="Úvod do knihovnictví"] .nav-folder-title-content::before { content: "ISKB02 · "', styl)
+        self.assertNotIn(nazev, styl)
+        seznam = json.loads(self.spust("_Systém/predmety.py", "--seznam").stdout)
+        self.assertIn("Úvod do knihovnictví", [p["nazev"] for p in seznam])
 
     def test_bez_ai_poznamka_tyden_zkouska_kalendar(self):
         self.spust("_Systém/predmety.py", "--pridat", "ISKB02 Úvod do knihovnictví")
