@@ -277,12 +277,21 @@ def citace(d):
     return s
 
 
+def do_nazvu(text, delka):
+    """Text do názvu souboru: bez lomítek, řídicích znaků a znaků, které Obsidian v názvu nesnese; nezačíná tečkou."""
+    text = re.sub(r'[/\\:*?"<>|#^\[\]\x00-\x1f]', "-", str(text or ""))
+    return text[:delka].strip().lstrip(".").strip()
+
+
 def citace_poznamka(data):
     c = citace(data)
-    prvni = (re.split(r"[;,]", data.get("autori") or "") or [""])[0].strip()
-    jmeno = " ".join(x for x in (prvni, str(data.get("rok") or "").strip()) if x)
-    titul = re.sub(r'[/\\:*?"<>|#^\[\]]', "-", str(data.get("nazev") or "zdroj"))[:70].strip()
-    cil = TREZOR / "_Zdroje" / f"{jmeno + ' – ' if jmeno else ''}{titul}.md"
+    prvni = do_nazvu(re.split(r"[;,]", str(data.get("autori") or ""))[0], 40)
+    jmeno = " ".join(x for x in (prvni, do_nazvu(data.get("rok"), 10)) if x)
+    titul = do_nazvu(data.get("nazev"), 70) or "zdroj"
+    zdroje = TREZOR / "_Zdroje"
+    cil = zdroje / f"{jmeno + ' – ' if jmeno else ''}{titul}.md"
+    if cil.resolve().parent != zdroje.resolve():  # pojistka: poznámka ke zdroji vždy jen v _Zdroje
+        sys.exit("_Zdroje?")
     if not cil.exists():
         sablona = (TREZOR / "_Systém" / "Šablony" / "Zdroj.md").read_text(encoding="utf8")
         hlava, telo = sablona.split("---", 2)[1:]

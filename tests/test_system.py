@@ -333,6 +333,29 @@ class Trezor(unittest.TestCase):
         self.assertTrue(any("Novák 2020 – Informační gramotnost" in z.name for z in zdroje))
         self.assertIn("citace:", next(z for z in zdroje if "Novák" in z.name).read_text())
 
+    def test_citace_nezapise_mimo_zdroje(self):
+        pred = set(self.tmp.rglob("*.md"))
+        for d in ({"autori": "../../../mimo", "rok": "2020", "nazev": "X"}, {"autori": "Novák", "rok": "../../mimo", "nazev": "Y"},
+                  {"autori": "..", "rok": "..", "nazev": ".."}, {"autori": "A\\..\\..\\B", "rok": 2021, "nazev": "/etc/x"}):
+            self.spust("_Systém/prehledy.py", "--citace", json.dumps(d))
+        nove = set(self.tmp.rglob("*.md")) - pred
+        self.assertEqual(len(nove), 4)
+        self.assertTrue(all(p.parent == self.t / "_Zdroje" and not p.name.startswith(".") for p in nove), sorted(map(str, nove)))
+
+    def test_poskozene_nastaveni(self):
+        (self.t / "_Systém/nastaveni.json").write_text("{nedopsáno")
+        self.spust("_Systém/priprav.py")  # fronta a přehledy fungují i bez nastavení
+        self.spust("_Systém/prehledy.py", "--tyden")
+        for skript in ("_Systém/Word/vytvor_sablonu.py", "_Systém/novy_ukol.py"):
+            r = self.spust(skript, ocekavam_chybu=True)
+            self.assertIn("nastaveni.json", r.stderr)
+            self.assertNotIn("Traceback", r.stderr)
+
+    def test_sablona_se_zvlastnim_jmenem(self):
+        self.nastav(jmeno='Tom & Jerry <"QA">')
+        self.spust("_Systém/Word/vytvor_sablonu.py")
+        platne_xml(self.t / "_Systém/Word/Šablona KISK.dotx")
+
     def test_podvrzeny_dokument_odmitnut(self):
         docx(self.tmp / "zly.docx", cil_obrazku="../../../evil.png")
         self.spust("_Systém/novy_ukol.py", PREDMET, "Zly", "--z-dokumentu", str(self.tmp / "zly.docx"), "--neotvirat",

@@ -84,6 +84,15 @@ Before installing it verifies the checksums of all files. What exactly it does i
 
 **Notes, materials, courses, settings and your course CSS stay.** System notes you have edited (Home, guide, templates, AI rules) are kept and the new version is saved next to them with “(new version)”. If anything fails during installation, all changes are reverted automatically. For emergencies there is **↩️ Undo the last update** in *Settings → Second Brain for KISK → Updates* for 7 days; then the temporary update backup (hidden `.druhy-mozek-zaloha` folder) moves to the Trash. Clicking Install confirms 🛡 only for files identical to the verified package. Updating manually works too: download the ZIP, run `Instalovat.command` → *Update an existing vault*. The check can be turned off in *Settings → Second Brain for KISK → Updates*.
 
+## 👥 Who it's for – and who it isn't
+
+- **For:** students of KISK, Faculty of Arts MU (or anyone willing to adapt it) on **macOS** with Obsidian 1.9+ and Python 3. The Word template, citations (ČSN ISO 690) and course structure follow KISK habits.
+- **Not supported:** Windows, Linux, iPhone/iPad and Android – the scripts, backup and AI buttons need macOS (on mobile Obsidian only shows the notes). Templates of other faculties or schools are not maintained; you can adapt the system yourself.
+- **With AI:** the materials you process are sent to the AI provider you chose. Don't put sensitive documents or other people's private materials into a vault where AI is turned on, and don't add plugins that run code from notes (Dataview JS, Templater) to it.
+- **As is, without warranty:** a non-commercial project of one student ([LICENSE](LICENSE)). Every release passes the automated tests described in [SECURITY.md](SECURITY.md), but it is not a supported product.
+- **Bugs and help:** via [Issues](https://github.com/shadowsh1t/second-brain-kisk/issues) or **🐞 Report a bug or idea** – answered as time allows; security reports first (see below).
+- **Tip:** try it first in a test vault with backup turned on, and don't update on the day of a release in the middle of the exam period – read the [CHANGELOG](CHANGELOG.md) first.
+
 ## Requirements
 
 | What | Link | Note |

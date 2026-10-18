@@ -3,6 +3,13 @@
 All notable changes to Second Brain for KISK. The newest version is at the top.
 When a new version is released, Obsidian offers it under **🆕 A new version of Second Brain is available** with a link to this list.
 
+## 1.0.5 – 2026-10-18
+
+- **Changing the language keeps your edits** – system notes you have edited (Home, guide, templates) stay and the translation is saved next to them with “(new version)”; Inbox, Concepts and Overviews with your own content are not touched. Replaced files are backed up to the hidden `.druhy-mozek-zaloha` folder first, even when automatic backup is off. Before, the language switch overwrote them.
+- Security: a citation can no longer create a note outside `_Zdroje` (author and year are now cleaned up in the file name like the title).
+- Fixed: a damaged or missing `nastaveni.json` no longer crashes the queue and overviews; the Word scripts say which setting is missing. A name containing `&` or `<` no longer breaks the Word template.
+- README: new section *Who it's for – and who it isn't* (macOS only, no warranty, how bugs are handled, AI and sensitive materials).
+
 ## 1.0.4 – 2026-10-18
 
 - The plugin no longer restarts itself (the Obsidian directory does not allow it). After changing the language, command names are translated right away. After an update or a revert, a notice asks you to restart Obsidian to load the new version.

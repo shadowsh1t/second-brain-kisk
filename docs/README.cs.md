@@ -84,6 +84,15 @@ Před instalací ověří kontrolní součty všech souborů. Co přesně dělá
 
 **Poznámky, materiály, předměty, nastavení a tvoje CSS předmětů zůstanou.** Systémové poznámky, které sis upravil (Domov, Návod, šablony, pravidla AI), se nepřepíšou – nová verze se uloží vedle s příponou „(nová verze)“. Když se instalace uprostřed pokazí, všechny změny se samy vrátí. Pro případ nouze je 7 dní k dispozici **↩️ Vrátit poslední aktualizaci** v *Nastavení → Second Brain for KISK → Aktualizace*; pak jde dočasná záloha z aktualizace (skrytá složka `.druhy-mozek-zaloha`) do koše. Klik na Instalovat potvrdí 🛡 jen u souborů shodných s ověřeným balíkem. Jde to i ručně: stáhni ZIP a spusť `Instalovat.command` → *Aktualizovat existující trezor*. Kontrolu jde vypnout v *Nastavení → Second Brain for KISK → Aktualizace*.
 
+## 👥 Pro koho to je – a pro koho ne
+
+- **Pro:** studenty a studentky KISK FF MU (nebo kohokoli, kdo si to upraví) na **macOS** s Obsidianem 1.9+ a Pythonem 3. Šablona Wordu, citace (ČSN ISO 690) a struktura předmětů vycházejí ze zvyklostí KISK.
+- **Nepodporováno:** Windows, Linux, iPhone/iPad a Android – skripty, záloha a tlačítka AI potřebují macOS (v mobilu Obsidian poznámky jen zobrazí). Šablony jiných fakult a škol se neudržují; systém si můžeš upravit sám/sama.
+- **S AI:** zpracovávané materiály se posílají poskytovateli AI, kterou sis vybral/a. Do trezoru se zapnutou AI nedávej citlivé dokumenty ani cizí soukromé materiály a nepřidávej do něj rozšíření, která spouštějí kód z poznámek (Dataview JS, Templater).
+- **Tak, jak je, bez záruky:** nekomerční projekt jednoho studenta ([LICENSE](../LICENSE)). Každé vydání projde automatickými testy popsanými v [SECURITY.cs.md](SECURITY.cs.md), ale není to podporovaný produkt.
+- **Chyby a pomoc:** přes [Issues](https://github.com/shadowsh1t/second-brain-kisk/issues) nebo **🐞 Nahlásit chybu nebo nápad** – odpovídám, jak to čas dovolí; bezpečnostní hlášení mají přednost (viz níže).
+- **Tip:** nejdřív to vyzkoušej v testovacím trezoru se zapnutou zálohou a uprostřed zkouškového neaktualizuj v den vydání – nejdřív si přečti [CHANGELOG](../CHANGELOG.md).
+
 ## Požadavky
 
 | Co | Odkaz | Poznámka |

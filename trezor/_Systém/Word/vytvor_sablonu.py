@@ -14,7 +14,11 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 SLOZKA = Path(__file__).resolve().parent
-NASTAVENI = json.loads((SLOZKA.parent / "nastaveni.json").read_text())
+try:
+    NASTAVENI = json.loads((SLOZKA.parent / "nastaveni.json").read_text())
+    JMENO, UCO = str(NASTAVENI["jmeno"]), str(NASTAVENI["uco"])
+except (OSError, ValueError, KeyError, TypeError):
+    sys.exit("_Systém/nastaveni.json: jmeno, uco?")
 ARGY = sys.argv[1:]
 JAZYK_DOKUMENTU = None
 if "--jazyk" in ARGY:
@@ -23,7 +27,6 @@ if "--jazyk" in ARGY:
     del ARGY[i:i + 2]
 OUT = ARGY[0] if ARGY else str(SLOZKA / "Šablona KISK.dotx")
 LOGO = SLOZKA / "logo-muni-arts.png"
-JMENO, UCO = NASTAVENI["jmeno"], NASTAVENI["uco"]
 _TEXTY = json.loads((SLOZKA.parent / "texty.json").read_text(encoding="utf8"))
 # jazyk dokumentů ve Wordu: --jazyk, jinak nastavení „jazyk_word“, jinak jazyk rozhraní
 T = {**_TEXTY["cs"], **_TEXTY.get(JAZYK_DOKUMENTU or NASTAVENI.get("jazyk_word") or NASTAVENI.get("jazyk") or "cs", {})}
@@ -167,7 +170,7 @@ doc_rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 settings = f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:settings {W}><w:defaultTabStop w:val="708"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat><w:themeFontLang w:val="{JAZYK}"/></w:settings>'
 core = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-<dc:title>{escape(T["sablona_titul"])}</dc:title><dc:creator>{JMENO}</dc:creator><cp:lastModifiedBy>{JMENO}</cp:lastModifiedBy>
+<dc:title>{escape(T["sablona_titul"])}</dc:title><dc:creator>{escape(JMENO)}</dc:creator><cp:lastModifiedBy>{escape(JMENO)}</cp:lastModifiedBy>
 </cp:coreProperties>'''
 
 with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:

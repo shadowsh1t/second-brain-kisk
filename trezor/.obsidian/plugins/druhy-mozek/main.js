@@ -241,19 +241,59 @@ module.exports = class DruhyMozek extends Plugin {
     }
   }
 
-  // Přepíše systémové poznámky (Domov, Návod, šablony, rozcestníky, tabulky) jazykovým balíčkem; tvoje poznámky nemění
+  // Přeloží systémové poznámky (Domov, Návod, šablony, rozcestníky, tabulky) jazykovým balíčkem – stejná pravidla jako aktualizace:
+  // neupravené se nahradí (původní do .druhy-mozek-zaloha), upravené zůstanou a překlad je vedle, rozcestníky s vlastním obsahem se nemění
   async aplikujJazykovyBalicek(jazyk) {
-    const balicek = JSON.parse(fs.readFileSync(path.join(this.zaklad, "_Systém", "jazyky", `${jazyk}.json`), "utf8"));
-    let zapsano = 0;
-    for (const [rel, obsah] of Object.entries(balicek.soubory || {})) {
-      if (path.isAbsolute(rel) || rel.split("/").includes("..")) continue;
-      if (rel.startsWith("Příklad předmětu/") && !(await this.app.vault.adapter.exists(rel))) continue;
-      const slozka = path.posix.dirname(rel);
-      if (slozka !== "." && !(await this.app.vault.adapter.exists(slozka))) await this.app.vault.adapter.mkdir(slozka);
-      await this.app.vault.adapter.write(rel, obsah);
-      zapsano++;
+    const slozkaJazyku = path.join(this.zaklad, "_Systém", "jazyky");
+    const balicek = JSON.parse(fs.readFileSync(path.join(slozkaJazyku, `${jazyk}.json`), "utf8")).soubory || {};
+    const otiskTextu = (t) => crypto.createHash("sha256").update(t, "utf8").digest("hex");
+    const zname = {};  // otisky neupravených verzí: obsah ze všech jazykových balíčků + co se nainstalovalo (instalace.json)
+    for (const j of Object.keys(JAZYKY)) {
+      let s = {};
+      try { s = JSON.parse(fs.readFileSync(path.join(slozkaJazyku, `${j}.json`), "utf8")).soubory || {}; } catch (e) { /* balíček chybí */ }
+      for (const [rel, t] of Object.entries(s)) (zname[rel] ||= new Set()).add(otiskTextu(t));
     }
-    return zapsano;
+    try {
+      const ev = JSON.parse(fs.readFileSync(path.join(this.zaklad, "_Systém", "instalace.json"), "utf8")).soubory || {};
+      for (const [rel, o] of Object.entries(ev)) (zname[rel] ||= new Set()).add(o);
+    } catch (e) { /* starší instalace */ }
+    const korenZaloh = path.join(this.zaklad, ".druhy-mozek-zaloha");
+    if (fs.existsSync(korenZaloh) && fs.lstatSync(korenZaloh).isSymbolicLink()) throw new Error(T("Balík nemá očekávanou podobu."));
+    const d = new Date(), zaloha = path.join(korenZaloh, `${d.getFullYear()}-${dv(d.getMonth() + 1)}-${dv(d.getDate())} ${dv(d.getHours())}.${dv(d.getMinutes())}.${dv(d.getSeconds())}`);
+    const v = { zapsano: 0, nove: [], nahrazeno: [], ponechano: [] };
+    try {
+      for (const [rel, text] of Object.entries(balicek)) {
+        if (!bezpecnaCesta(rel) || typeof text !== "string") continue;
+        const cil = path.join(this.zaklad, rel);
+        if ((rel.startsWith("Příklad předmětu/") && !fs.existsSync(cil)) || this.vedePresOdkaz(cil)) continue;
+        if (!fs.existsSync(cil)) { fs.mkdirSync(path.dirname(cil), { recursive: true }); fs.writeFileSync(cil, text); v.nove.push(rel); v.zapsano++; continue; }
+        const soucasny = fs.readFileSync(cil, "utf8");
+        if (soucasny === text) continue;
+        if (VZDY_NAHRADIT.includes(rel) || zname[rel]?.has(otiskTextu(soucasny))) {
+          fs.mkdirSync(path.dirname(path.join(zaloha, rel)), { recursive: true });
+          fs.copyFileSync(cil, path.join(zaloha, rel));
+          fs.writeFileSync(cil, text);
+          v.nahrazeno.push(rel); v.zapsano++;
+        } else if (!JEN_VYTVORIT.includes(rel)) {  // uživatel soubor upravil → nechat, překlad uložit vedle
+          const vedle = path.join(path.dirname(cil), path.basename(cil, path.extname(cil)) + (PRIPONA_NOVA_VERZE[jazyk] || PRIPONA_NOVA_VERZE.cs) + path.extname(cil));
+          fs.writeFileSync(vedle, text);
+          v.ponechano.push(rel);
+        }  // rozcestník s vlastním obsahem patří uživateli – nemění se
+      }
+    } catch (e) {
+      for (const rel of v.nahrazeno) fs.copyFileSync(path.join(zaloha, rel), path.join(this.zaklad, rel));
+      for (const rel of v.nove) { try { fs.unlinkSync(path.join(this.zaklad, rel)); } catch (x) { /* už není */ } }
+      throw e;
+    }
+    return v;
+  }
+
+  // Vede cesta v trezoru přes symbolický odkaz? (zápis by pak mohl skončit mimo trezor)
+  vedePresOdkaz(cil) {
+    for (let x = cil; x.startsWith(this.zaklad + path.sep); x = path.dirname(x)) {
+      try { if (fs.lstatSync(x).isSymbolicLink()) return true; } catch (e) { /* neexistuje */ }
+    }
+    return false;
   }
 
   // Příkazy v paletě; po změně jazyka se přejmenují na místě – rozšíření se samo nevypíná ani nezapíná (pravidla adresáře)
@@ -420,13 +460,12 @@ module.exports = class DruhyMozek extends Plugin {
     if (fs.existsSync(korenZaloh) && fs.lstatSync(korenZaloh).isSymbolicLink()) throw new Error(T("Balík nemá očekávanou podobu."));
     const d = new Date(), nazev = `${d.getFullYear()}-${dv(d.getMonth() + 1)}-${dv(d.getDate())} ${dv(d.getHours())}.${dv(d.getMinutes())}.${dv(d.getSeconds())}`;
     const zaloha = path.join(korenZaloh, nazev);
-    const odkaz = (c) => { for (let x = c; x.startsWith(this.zaklad + path.sep); x = path.dirname(x)) { try { if (fs.lstatSync(x).isSymbolicLink()) return true; } catch (e) { /* neexistuje */ } } return false; };
     const v = { nahrazeno: [], nove: [], ponechano: [] };
     try {
       for (const [rel, f] of Object.entries(soubory)) {
         if (f.druh === "ukazka" || !bezpecnaCesta(rel)) continue;
         const cil = path.join(this.zaklad, rel);
-        if (odkaz(cil)) continue;
+        if (this.vedePresOdkaz(cil)) continue;
         if (!fs.existsSync(cil)) { fs.mkdirSync(path.dirname(cil), { recursive: true }); fs.writeFileSync(cil, f.text); v.nove.push(rel); continue; }
         if (f.druh === "uzivatelske") continue;
         const soucasny = fs.readFileSync(cil, "utf8");
@@ -1277,8 +1316,9 @@ module.exports = class DruhyMozek extends Plugin {
     let chyba = false;
     if (zmenaJazyka) {
       try {
-        const n = await this.aplikujJazykovyBalicek(nove.jazyk || "cs");
-        zpravy.push(T("🌐 Jazyk přepnut – systémové poznámky přeloženy ({0}). Tvoje poznámky se nezměnily.", n));
+        const v = await this.aplikujJazykovyBalicek(nove.jazyk || "cs");
+        zpravy.push(T("🌐 Jazyk přepnut – systémové poznámky přeloženy ({0}). Tvoje poznámky se nezměnily.", v.zapsano));
+        if (v.ponechano.length) zpravy.push(T("Upravené soubory zůstaly, nová verze je vedle nich: {0}", v.ponechano.join(", ")));
       } catch (e) {
         zpravy.push(T("Jazykový balíček se nepodařilo použít: {0}", e.message)); chyba = true;
       }

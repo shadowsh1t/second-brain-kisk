@@ -46,7 +46,11 @@ DAVKA = 8  # položek na jedno /zpracuj (stejné číslo je v .claude/commands/z
 VYSTUP = 4_000  # odhad tokenů na napsání poznámky, pojmů a kartiček k jedné položce
 MAX_CAST = 50_000_000  # max. velikost jedné rozbalené části pptx/docx (ochrana proti zip bombě)
 NASTAVENI = SYS / "nastaveni.json"
-VLASTNI_PREFIX = (json.loads(NASTAVENI.read_text())["uco"] + "-") if NASTAVENI.exists() else None
+try:
+    _UCO = str(json.loads(NASTAVENI.read_text()).get("uco") or "")
+except Exception:  # chybějící nebo poškozené nastavení – skripty běží dál, jen nepoznají vlastní práce podle UČO
+    _UCO = ""
+VLASTNI_PREFIX = _UCO + "-" if _UCO else None
 ZAMEK = SYS / ".priprav.lock"
 CACHE_VERZE = 2  # při změně extrakce zvýšit – čekající položky se přegenerují, hotové ne
 MALO_TEXTU = 80  # znaků: slajd/strana s menším množstvím textu je „hlavně obrázek“

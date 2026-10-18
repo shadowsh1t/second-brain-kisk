@@ -84,6 +84,15 @@ Pred inštaláciou overí kontrolné súčty všetkých súborov. Čo presne rob
 
 **Poznámky, materiály, predmety, nastavenia a tvoje CSS predmetov zostanú.** Systémové poznámky, ktoré si upravil (Domov, Návod, šablóny, pravidlá AI), sa neprepíšu – nová verzia sa uloží vedľa s príponou „(nová verzia)“. Keď sa inštalácia uprostred pokazí, všetky zmeny sa samy vrátia. Pre prípad núdze je 7 dní k dispozícii **↩️ Vrátiť poslednú aktualizáciu** v *Nastavenia → Second Brain for KISK → Aktualizácie*; potom ide dočasná záloha z aktualizácie (skrytý priečinok `.druhy-mozek-zaloha`) do koša. Klik na Inštalovať potvrdí 🛡 len pri súboroch zhodných s overeným balíkom. Ide to aj ručne: stiahni ZIP a spusti `Instalovat.command` → *Aktualizovať existujúci trezor*. Kontrolu ide vypnúť v *Nastavenia → Second Brain for KISK → Aktualizácie*.
 
+## 👥 Pre koho to je – a pre koho nie
+
+- **Pre:** študentov a študentky KISK FF MU (alebo kohokoľvek, kto si to upraví) na **macOS** s Obsidianom 1.9+ a Pythonom 3. Šablóna Wordu, citácie (ČSN ISO 690) a štruktúra predmetov vychádzajú zo zvyklostí KISK.
+- **Nepodporované:** Windows, Linux, iPhone/iPad a Android – skripty, záloha a tlačidlá AI potrebujú macOS (v mobile Obsidian poznámky len zobrazí). Šablóny iných fakúlt a škôl sa neudržiavajú; systém si môžeš upraviť sám/sama.
+- **S AI:** spracúvané materiály sa posielajú poskytovateľovi AI, ktorú si si vybral/a. Do trezoru so zapnutou AI nedávaj citlivé dokumenty ani cudzie súkromné materiály a nepridávaj doň rozšírenia, ktoré spúšťajú kód z poznámok (Dataview JS, Templater).
+- **Tak, ako je, bez záruky:** nekomerčný projekt jedného študenta ([LICENSE](../LICENSE)). Každé vydanie prejde automatickými testami opísanými v [SECURITY.sk.md](SECURITY.sk.md), ale nie je to podporovaný produkt.
+- **Chyby a pomoc:** cez [Issues](https://github.com/shadowsh1t/second-brain-kisk/issues) alebo **🐞 Nahlásiť chybu alebo nápad** – odpovedám, ako to čas dovolí; bezpečnostné hlásenia majú prednosť (pozri nižšie).
+- **Tip:** najprv to vyskúšaj v testovacom trezore so zapnutou zálohou a uprostred skúškového neaktualizuj v deň vydania – najprv si prečítaj [CHANGELOG](../CHANGELOG.md).
+
 ## Požiadavky
 
 | Čo | Odkaz | Poznámka |

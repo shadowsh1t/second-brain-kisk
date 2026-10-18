@@ -26,8 +26,11 @@ from xml.sax.saxutils import escape
 SYSTEM = Path(__file__).resolve().parent
 TREZOR = Path(os.environ.get("TREZOR") or SYSTEM.parent)
 SABLONA = SYSTEM / "Word" / "Šablona KISK.dotx"
-NASTAVENI = json.loads((SYSTEM / "nastaveni.json").read_text())
-PREFIX = f'{NASTAVENI["uco"]}-{NASTAVENI["jmeno_soubor"]}'
+try:
+    NASTAVENI = json.loads((SYSTEM / "nastaveni.json").read_text())
+    PREFIX = f'{NASTAVENI["uco"]}-{NASTAVENI["jmeno_soubor"]}'
+except (OSError, ValueError, KeyError, TypeError):
+    sys.exit("_Systém/nastaveni.json: uco, jmeno_soubor?")
 _TEXTY = json.loads((SYSTEM / "texty.json").read_text(encoding="utf8"))
 T = {**_TEXTY["cs"], **_TEXTY.get(NASTAVENI.get("jazyk") or "cs", {})}  # texty v jazyce uživatele
 
