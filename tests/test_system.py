@@ -147,6 +147,55 @@ class Trezor(unittest.TestCase):
         text = (self.t / json.loads((self.t / "_Systém/fronta.json").read_text())[0]["cache"]).read_text()
         self.assertIn("Před\n| Jméno | Hodnota | Pozn. |\n|---|---|---|\n| Spojeno | | x A B |\nZa", text)
 
+    def test_presunuty_soubor_si_necha_stav(self):
+        """Přesun zpracovaného materiálu není duplicita: stav jde s ním a nevznikne odkaz na neexistující soubor."""
+        self.nastav(ocr=False)
+        pptx(self.t / PREDMET / "a.pptx", "Text přednášky o knihovnách")
+        self.spust("_Systém/priprav.py")
+        self.spust("_Systém/priprav.py", "--hotovo", f"{PREDMET}/a.pptx")
+        shutil.move(str(self.t / PREDMET / "a.pptx"), str(self.t / PREDMET / "Učivo/Nový název.pptx"))
+        self.spust("_Systém/priprav.py")
+        reg = json.loads((self.t / "_Systém/registr.json").read_text())
+        self.assertEqual(reg[f"{PREDMET}/Učivo/Nový název.pptx"]["stav"], "hotovo")
+        self.assertNotIn(f"{PREDMET}/a.pptx", reg)
+
+    def test_duplicita_mrtveho_souboru_se_opravi(self):
+        """Starší registr: duplicita odkazuje na soubor, který už neexistuje → soubor přebírá jeho roli."""
+        self.nastav(ocr=False)
+        pptx(self.t / PREDMET / "a.pptx", "Text přednášky o knihovnách")
+        self.spust("_Systém/priprav.py")
+        reg_p = self.t / "_Systém/registr.json"
+        reg = json.loads(reg_p.read_text())
+        reg[f"{PREDMET}/a.pptx"].update(stav="duplicita", stejne_jako=f"{PREDMET}/uz neni.pptx")
+        reg_p.write_text(json.dumps(reg))
+        self.spust("_Systém/priprav.py")
+        z = json.loads(reg_p.read_text())[f"{PREDMET}/a.pptx"]
+        self.assertEqual(z["stav"], "hotovo")
+        self.assertNotIn("stejne_jako", z)
+
+    def test_duplicity_jsou_videt(self):
+        """Stejný soubor i stejný text v jiném souboru se ukážou ve Frontě; „nechat“ pár skryje."""
+        self.nastav(ocr=False)
+        slova = " ".join(f"slovo{i}" for i in range(80))
+        pptx(self.t / PREDMET / "a.pptx", slova)
+        shutil.copy(self.t / PREDMET / "a.pptx", self.t / PREDMET / "kopie.pptx")
+        pptx(self.t / PREDMET / "b.pptx", slova + " navíc")
+        pptx(self.t / PREDMET / "jine.pptx", " ".join(f"jine{i}" for i in range(80)))
+        self.spust("_Systém/priprav.py")
+        d = json.loads((self.t / "_Systém/duplicity.json").read_text())
+        pary = {frozenset(Path(x[k]).name for k in "ab"): x for x in d}
+        self.assertEqual(pary[frozenset({"a.pptx", "kopie.pptx"})]["typ"], "stejne")
+        self.assertEqual(pary[frozenset({"a.pptx", "b.pptx"})]["typ"], "podobne")
+        self.assertGreaterEqual(pary[frozenset({"a.pptx", "b.pptx"})]["shoda"], 90)
+        self.assertFalse([x for x in d if "jine.pptx" in x["a"] + x["b"]])
+        fronta = (self.t / "_Systém/Fronta.md").read_text()
+        self.assertIn("kopie.pptx", fronta.split("## Duplicity")[1])
+        self.spust("_Systém/priprav.py", "--nechat", f"{PREDMET}/a.pptx", f"{PREDMET}/b.pptx")
+        self.spust("_Systém/priprav.py")
+        d = json.loads((self.t / "_Systém/duplicity.json").read_text())
+        self.assertNotIn(frozenset({"a.pptx", "b.pptx"}), {frozenset(Path(x[k]).name for k in "ab") for x in d})
+        self.spust("_Systém/priprav.py", "--nechat", "neni.pdf", f"{PREDMET}/a.pptx", ocekavam_chybu=True)
+
     def test_cache_nove_verze(self):
         """Čekající položka se starou cache se vytvoří znovu, hotová se nemění."""
         self.nastav(ocr=False)
@@ -176,11 +225,211 @@ class Trezor(unittest.TestCase):
         self.assertEqual((foto["cache"], foto["poznamka"]), (None, "AI přečte obrázek přímo"), "bez OCR čte obrázek AI")
 
     def test_presun_jen_z_inboxu(self):
-        (self.t / "_Inbox/material.txt").write_text("x")
-        self.spust("_Systém/priprav.py", "--presun", "_Inbox/material.txt", "../", ocekavam_chybu=True)
+        (self.t / "_Vkládání učiva/material.txt").write_text("x")
+        self.spust("_Systém/priprav.py", "--presun", "_Vkládání učiva/material.txt", "../", ocekavam_chybu=True)
         self.spust("_Systém/priprav.py", "--presun", f"{PREDMET}/{PREDMET}.md", PREDMET, ocekavam_chybu=True)
-        self.spust("_Systém/priprav.py", "--presun", "_Inbox/material.txt", PREDMET)
-        self.assertTrue((self.t / PREDMET / "material.txt").exists())
+        self.spust("_Systém/priprav.py", "--presun", "_Vkládání učiva/material.txt", PREDMET)
+        self.assertTrue((self.t / PREDMET / "Učivo/material.txt").exists())
+
+    def test_novy_ukol_ma_vlastni_slozku(self):
+        prvni = self.spust("_Systém/novy_ukol.py", PREDMET, "Esej", "--neotvirat").stdout.strip().split("\n")
+        self.assertEqual(Path(prvni[1]), Path(PREDMET) / "Úkoly/1 Esej/Úkol – Esej.md")
+        self.assertEqual(Path(prvni[0]).parent, Path(PREDMET) / "Úkoly/1 Esej")
+        druhy = self.spust("_Systém/novy_ukol.py", PREDMET, "Referát", "--neotvirat").stdout.strip().split("\n")
+        self.assertEqual(Path(druhy[0]).parent, Path(PREDMET) / "Úkoly/2 Referát")
+        self.spust("_Systém/novy_ukol.py", PREDMET, "Esej", "--neotvirat", ocekavam_chybu=True)  # stejný úkol podruhé ne
+        self.assertEqual(sorted(x.name for x in (self.t / PREDMET / "Úkoly").iterdir() if x.is_dir()), ["1 Esej", "2 Referát"])
+
+    def test_zarazeni_do_uciva(self):
+        inbox = self.t / "_Vkládání učiva"
+        (inbox / "udk01.pptx").write_text("x")
+        r = self.spust("_Systém/priprav.py", "--presun", "_Vkládání učiva/udk01.pptx", PREDMET, "Co je knihovna – ISKB00")
+        self.assertTrue((self.t / PREDMET / "Učivo/Co je knihovna – ISKB00.pptx").exists())
+        self.assertIn("Učivo/Co je knihovna", r.stdout)
+        # i soubor položený přímo do složky předmětu
+        (self.t / PREDMET / "b.pdf").write_text("x")
+        self.spust("_Systém/priprav.py", "--presun", f"{PREDMET}/b.pdf", PREDMET)
+        self.assertTrue((self.t / PREDMET / "Učivo/b.pdf").exists())
+        # jinde ne, cizí jméno ven ne, přepsat ne
+        (self.t / PREDMET / "Poznámky/c.pdf").write_text("x")
+        self.spust("_Systém/priprav.py", "--presun", f"{PREDMET}/Poznámky/c.pdf", PREDMET, ocekavam_chybu=True)
+        (inbox / "d.pdf").write_text("x")
+        self.spust("_Systém/priprav.py", "--presun", "_Vkládání učiva/d.pdf", PREDMET, "   ", ocekavam_chybu=True)
+        self.spust("_Systém/priprav.py", "--presun", "_Vkládání učiva/d.pdf", PREDMET, "b", ocekavam_chybu=True)
+        self.spust("_Systém/priprav.py", "--presun", "_Vkládání učiva/d.pdf", PREDMET, "../../ven")
+        self.assertEqual(len(list((self.t / PREDMET / "Učivo").glob("*ven.pdf"))), 1)
+        self.assertFalse((self.tmp / "ven.pdf").exists())
+
+    def test_navrh_nazvu(self):
+        self.nastav(ocr=False)
+        inbox = self.t / "_Vkládání učiva"
+        io = "Interaktivní osnova\nPŘÍKLAD PŘEDMĚTU\nKonflikt člověka a řádu\nUčitel doporučuje studovat od 21. 9. 2026\n" + "text " * 50
+        (inbox / "stazeno (3).txt").write_text(io)
+        (inbox / "udk01_uvod.txt").write_text("ISKB00\nCo je knihovna?\nMgr. Někdo\n" + "text " * 50)
+        self.spust("_Systém/priprav.py")
+        n = json.loads(self.spust("_Systém/priprav.py", "--navrh", "_Vkládání učiva/stazeno (3).txt").stdout)
+        self.assertEqual(n["predmet"], PREDMET)  # podle názvu v textu
+        self.assertEqual(n["nazev"], "IO – Konflikt člověka a řádu – ISKB00")
+        n = json.loads(self.spust("_Systém/priprav.py", "--navrh", "_Vkládání učiva/udk01_uvod.txt").stdout)
+        self.assertEqual(n["predmet"], PREDMET)  # podle kódu
+        self.assertEqual(n["nazev"], "Co je knihovna – ISKB00")
+        self.spust("_Systém/priprav.py", "--navrh", "../ven.txt", ocekavam_chybu=True)
+        # skutečné tvary: nadpis přes víc řádků s dvojtečkou, kód v nadpisu, věta místo nadpisu
+        (inbox / "c.txt").write_text("Interaktivní osnova\nPŘÍKLAD PŘEDMĚTU\nKořeny moderního románu: Cervantesův Don\nQuijote a další\n" + "text " * 50)
+        (inbox / "d.txt").write_text("Zadání portfolia ISKB00\nCíl: Vytvoření vlastního literárního portfolia má sloužit k rozvoji vašich dovedností jako kurátorů\n" + "text " * 50)
+        self.spust("_Systém/priprav.py")
+        self.assertEqual(json.loads(self.spust("_Systém/priprav.py", "--navrh", "_Vkládání učiva/c.txt").stdout)["nazev"], "IO – Kořeny moderního románu – ISKB00")
+        self.assertEqual(json.loads(self.spust("_Systém/priprav.py", "--navrh", "_Vkládání učiva/d.txt").stdout)["nazev"], "Zadání portfolia – ISKB00")
+
+    def test_migrace_inboxu(self):
+        """Starší trezor: _Inbox se přejmenuje, registr, odkaz na Domově i složka nových souborů jdou s ním."""
+        self.nastav(ocr=False)
+        novy = self.t / "_Vkládání učiva"
+        shutil.move(str(novy), str(self.t / "_Inbox"))
+        shutil.move(str(self.t / "_Inbox/Vkládání učiva.md"), str(self.t / "_Inbox/Inbox.md"))
+        (self.t / "_Inbox/Inbox.md").write_text("moje")
+        pptx(self.t / "_Inbox/a.pptx", "Text přednášky o knihovnách")
+        self.spust("_Systém/priprav.py")  # vytvoří registr – migrace proběhne hned
+        reg = json.loads((self.t / "_Systém/registr.json").read_text())
+        self.assertIn("_Vkládání učiva/a.pptx", reg)
+        self.assertFalse((self.t / "_Inbox").exists())
+        self.assertEqual((novy / "Vkládání učiva.md").read_text(), "moje")
+        # registr ze staré verze se přepíše na nové cesty; druhý běh nic nerozbije
+        shutil.move(str(novy), str(self.t / "_Inbox"))
+        reg_p = self.t / "_Systém/registr.json"
+        reg_p.write_text(reg_p.read_text().replace("_Vkládání učiva/", "_Inbox/"))
+        domov = self.t / "00 Domov.md"
+        domov.write_text("[[Inbox|📥 Inbox]] a [[Inbox]]")
+        app = self.t / ".obsidian/app.json"
+        app.write_text(json.dumps({"newFileFolderPath": "_Inbox"}))
+        self.spust("_Systém/priprav.py")
+        self.assertEqual(json.loads(reg_p.read_text())["_Vkládání učiva/a.pptx"]["stav"], "ceka")
+        self.assertEqual(domov.read_text(), "[[Vkládání učiva|📥 Inbox]] a [[Vkládání učiva]]")
+        # rozšíření stihlo založit novou složku dřív: obsah se spojí a vlastní rozcestník vyhraje
+        shutil.move(str(novy / "Vkládání učiva.md"), str(self.tmp / "sablona.md"))
+        (self.t / "_Inbox").mkdir()
+        (self.t / "_Inbox/Inbox.md").write_text("moje 2")
+        (self.t / "_Inbox/z.pdf").write_text("x")
+        (novy / "Vkládání učiva.md").write_text("čerstvá šablona")
+        self.spust("_Systém/priprav.py")
+        self.assertFalse((self.t / "_Inbox").exists())
+        self.assertEqual((novy / "Vkládání učiva.md").read_text(), "moje 2")
+        self.assertTrue((novy / "z.pdf").exists())
+        self.assertEqual(json.loads(app.read_text())["newFileFolderPath"], "_Vkládání učiva")
+        self.spust("_Systém/priprav.py")
+
+    def navrhy(self):
+        return json.loads((self.t / "_Systém/ukoly_navrhy.json").read_text())
+
+    def test_ukol_ze_souboru(self):
+        """Zadání v materiálu se nabídne jako nový úkol s termínem; přidání a ignorování se pamatují."""
+        self.nastav(ocr=False)
+        p = self.t / PREDMET / "Učivo"
+        p.mkdir(exist_ok=True)
+        (p / "osnova.txt").write_text("Téma týdne\nUčitel doporučuje studovat od 1. 10. 2026 do 8. 10. 2026.\n"
+                                      "Zadání úkolu č. 2 Kurátorské portfolio\nOdevzdejte do 16. 12. 2026.\n" + "text " * 40)
+        (p / "prednaska.txt").write_text("Dějiny knihoven\nÚkolem knihovny je sbírat.\n" + "text " * 40)
+        self.spust("_Systém/priprav.py")
+        nove = self.navrhy()["nove"]
+        self.assertEqual([x["soubor"] for x in nove], [f"{PREDMET}/Učivo/osnova.txt"])
+        self.assertEqual(nove[0]["nazev"], "Kurátorské portfolio")
+        self.assertEqual(nove[0]["termin"], "2026-12-16")
+        self.assertEqual(nove[0]["predmet"], PREDMET)
+        r = self.spust("_Systém/priprav.py", "--pridej-ukol", nove[0]["soubor"], PREDMET, nove[0]["nazev"], nove[0]["termin"])
+        rel = r.stdout.strip().split("\n")[-1]
+        self.assertEqual(rel, f"{PREDMET}/Úkoly/1 Kurátorské portfolio/Úkol – Kurátorské portfolio.md")
+        text = (self.t / rel).read_text()
+        for x in ("typ: ukol", "kod: ISKB00", "termin: 2026-12-16", "stav: otevreno", "osnova.txt"):
+            self.assertIn(x, text)
+        self.spust("_Systém/priprav.py")
+        self.assertEqual(self.navrhy()["nove"], [], "přidaný úkol se znovu nenabízí")
+        # ignorování a zlé vstupy
+        (p / "dalsi.txt").write_text("Domácí úkol: Rešerše zdrojů\n" + "text " * 40)
+        self.spust("_Systém/priprav.py")
+        klic = self.navrhy()["nove"][0]["klic"]
+        self.spust("_Systém/priprav.py", "--ignoruj", klic)
+        self.spust("_Systém/priprav.py")
+        self.assertEqual(self.navrhy()["nove"], [])
+        self.spust("_Systém/priprav.py", "--pridej-ukol", "../ven.txt", PREDMET, "x", ocekavam_chybu=True)
+        self.spust("_Systém/priprav.py", "--pridej-ukol", f"{PREDMET}/Učivo/dalsi.txt", "../ven", "x", ocekavam_chybu=True)
+        self.spust("_Systém/priprav.py", "--pridej-ukol", f"{PREDMET}/Učivo/dalsi.txt", PREDMET, "x", "zitra", ocekavam_chybu=True)
+        self.spust("_Systém/priprav.py", "--pridej-ukol", f"{PREDMET}/Učivo/dalsi.txt", PREDMET, " \n ", ocekavam_chybu=True)
+        self.assertFalse((self.tmp / "ven").exists())
+
+    def test_termin_slovem(self):
+        self.nastav(ocr=False)
+        p = self.t / PREDMET / "Učivo"
+        p.mkdir(exist_ok=True)
+        (p / "a.txt").write_text("Termín odevzdání úkolu do Odevzdávárny – nejpozději 25. října 2026\n" + "text " * 40)
+        (p / "b.txt").write_text("Domácí úkol: Rešerše knihoven\nOdevzdejte nejpozději v neděli 11. října.\n" + "text " * 40)
+        self.spust("_Systém/priprav.py")
+        t = {Path(x["soubor"]).name: x["termin"] for x in self.navrhy()["nove"]}
+        self.assertEqual(t["a.txt"], "2026-10-25")
+        self.assertTrue(t["b.txt"].endswith("-10-11"), t)
+
+    def test_zadani_z_realnych_dokumentu(self):
+        """Podle skutečných zadání: termín daleko od nadpisu, zadání portfolia, odpovědník; datum studia se nebere."""
+        self.nastav(ocr=False)
+        p = self.t / PREDMET / "Učivo"
+        p.mkdir(exist_ok=True)
+        vypln = "\n".join(f"Odstavec {i} s obsahem bez data." for i in range(12))
+        (p / "ukol.txt").write_text(f"Povinný domácí úkol č. 1 – Komplexní práce s textem\n{vypln}\nTermín odevzdání do Odevzdávárny – nejpozději 25. října 2026\n" + "text " * 40)
+        (p / "port.txt").write_text(f"Zadání portfolia ISKB00\n{vypln}\nZa uvedený rok 12. 5. 2020 se nic nevybírá.\n" + "text " * 40)
+        (p / "io.txt").write_text("Interaktivní osnova\nUčitel doporučuje studovat od 28. 9. 2026 do 15. 10. 2026.\nOdpovědník na 3 otázky k této kapitole\n" + "text " * 40)
+        self.spust("_Systém/priprav.py")
+        n = {Path(x["soubor"]).name: x for x in self.navrhy()["nove"]}
+        self.assertEqual(n["ukol.txt"]["termin"], "2026-10-25")
+        self.assertEqual(n["port.txt"]["termin"], "", "datum bez slova o odevzdání není termín")
+        self.assertEqual(n["port.txt"]["nazev"], "Portfolio")
+        self.assertEqual(n["io.txt"]["termin"], "", "doporučené studium není termín")
+
+    def test_fronta_bez_ai_ukazuje_rozsah(self):
+        """Bez AI: místo odhadu minut počet slidů, stran nebo slov."""
+        self.nastav(ocr=False, ai="zadna")
+        pptx(self.t / PREDMET / "a.pptx", "Text přednášky o knihovnách")
+        (self.t / PREDMET / "b.txt").write_text("slovo " * 30)
+        self.spust("_Systém/priprav.py")
+        fronta = (self.t / "_Systém/Fronta.md").read_text()
+        self.assertIn("Rozsah", fronta)
+        self.assertIn("slidů: 1", fronta)
+        self.assertNotIn(" min", fronta)
+        self.assertRegex(fronta, r"b\.txt.*slov: 30")
+
+    def test_nabidka_hotovo(self):
+        """Odevzdaná práce ve složce úkolu nabídne „hotovo“; prázdná šablona ani nic jiného ne."""
+        self.nastav(ocr=False)
+        r = self.spust("_Systém/novy_ukol.py", PREDMET, "Esej", "--neotvirat").stdout.strip().split("\n")
+        self.spust("_Systém/priprav.py")
+        self.assertEqual(self.navrhy()["hotove"], [], "čerstvá šablona není hotová práce")
+        slozka = (self.t / r[1]).parent
+        (slozka / "Esej – vypracováno – ISKB00.docx").write_text("x")
+        self.spust("_Systém/priprav.py")
+        h = self.navrhy()["hotove"]
+        self.assertEqual(h[0]["ukol"], r[1])
+        self.assertIn("vypracováno", h[0]["soubor"])
+        self.spust("_Systém/priprav.py", "--ignoruj", h[0]["klic"])
+        self.spust("_Systém/priprav.py")
+        self.assertEqual(self.navrhy()["hotove"], [])
+        # klipy ve složce úkolu také, hotový úkol už ne
+        r2 = self.spust("_Systém/novy_ukol.py", PREDMET, "Video", "--neotvirat").stdout.strip().split("\n")
+        (self.t / r2[1]).parent.joinpath("Klipy").mkdir()
+        (self.t / r2[1]).parent.joinpath("Klipy/1.mp4").write_text("x")
+        self.spust("_Systém/priprav.py")
+        self.assertEqual([x["ukol"] for x in self.navrhy()["hotove"]], [r2[1]])
+        n = self.t / r2[1]
+        n.write_text(n.read_text().replace("stav: otevreno", "stav: hotovo"))
+        self.spust("_Systém/priprav.py")
+        self.assertEqual(self.navrhy()["hotove"], [])
+
+    def test_prehled_predmetu_ma_interaktivni_ukoly(self):
+        prehled = self.t / PREDMET / f"{PREDMET}.md"
+        self.assertIn("```druhy-mozek-ukoly\npredmet\n```", prehled.read_text())
+        prehled.write_text(prehled.read_text().replace("```druhy-mozek-ukoly\npredmet\n```", "![[Studium.base#Úkoly předmětu]]"))
+        domov = self.t / "00 Domov.md"
+        domov.write_text("> > ![[Studium.base#Nejbližší termíny]]\n")
+        self.spust("_Systém/priprav.py")
+        self.assertIn("```druhy-mozek-ukoly\npredmet\n```", prehled.read_text())
+        self.assertEqual(domov.read_text(), "> > ```druhy-mozek-ukoly\n> > ```\n")
 
     def test_novy_ukol(self):
         r = self.spust("_Systém/novy_ukol.py", PREDMET, "Test/s:lomítky", "--termin", "2026-12-01", "--neotvirat")
@@ -227,7 +476,8 @@ class Trezor(unittest.TestCase):
         self.assertIn("kod: ISKB02", prehled)
         self.assertIn('nazev: "Úvod do knihovnictví"', prehled)
         self.assertNotIn("[!tip]", prehled)
-        self.assertTrue((self.t / "Úvod do knihovnictví/Úkoly").is_dir())
+        for slozka in ("Učivo", "Poznámky", "Úkoly", "Organizace"):
+            self.assertTrue((self.t / "Úvod do knihovnictví" / slozka).is_dir(), slozka)
         self.assertTrue((self.t / "Bez kódu/Bez kódu.md").exists())
         self.assertFalse((self.tmp / "zly").exists())
         self.assertFalse((self.t / "_skryty").exists())
@@ -269,7 +519,7 @@ class Trezor(unittest.TestCase):
         # 📝 poznámka k materiálu: vyplněný předmět, kód, zdroj, číslování; materiál se odškrtne
         r = self.spust("_Systém/prehledy.py", "--poznamka", "Úvod do knihovnictví/01_Dejiny_knihoven.pptx")
         rel = r.stdout.strip().split("\n")[-1]
-        self.assertEqual(rel, "Úvod do knihovnictví/Poznámky/ISKB02 01 – 01 Dejiny knihoven.md")
+        self.assertEqual(rel, "Úvod do knihovnictví/Poznámky/01 Dejiny knihoven – ISKB02.md")
         text = (self.t / rel).read_text()
         for x in ('predmet: "[[Úvod do knihovnictví]]"', "kod: ISKB02", "typ: prednaska",
                   'zdroj: "[[Úvod do knihovnictví/01_Dejiny_knihoven.pptx|01_Dejiny_knihoven.pptx]]"'):
@@ -316,8 +566,8 @@ class Trezor(unittest.TestCase):
         (self.t / "Literatura/text.txt").write_text("slovo " * 1000)
         self.spust("_Systém/priprav.py")
         fronta = (self.t / "_Systém/Fronta.md").read_text()
-        self.assertIn("| Čtení |", fronta)
-        self.assertIn("~5 min", fronta)
+        self.assertIn("| Rozsah |", fronta)
+        self.assertIn("slov: 1000", fronta)
         self.assertNotIn("tokenů", fronta)
         self.spust("_Systém/novy_ukol.py", "Literatura", "Esej", "--termin", "2026-12-01", "--neotvirat")
         (self.t / "_Archiv").mkdir()
@@ -373,7 +623,7 @@ class Trezor(unittest.TestCase):
         docx(self.tmp / "zly.docx", cil_obrazku="../../../evil.png")
         self.spust("_Systém/novy_ukol.py", PREDMET, "Zly", "--z-dokumentu", str(self.tmp / "zly.docx"), "--neotvirat",
                    ocekavam_chybu=True)
-        self.assertEqual(list((self.t / PREDMET / "Úkoly").glob("*Zly*.docx")), [])
+        self.assertEqual(list((self.t / PREDMET / "Úkoly").rglob("*Zly*.docx")), [])
 
 
 class Instalator(unittest.TestCase):
@@ -591,12 +841,25 @@ class Aktualizace(unittest.TestCase):
         self.assertIn(f"const JEN_VYTVORIT = {json.dumps(aktualizace.JEN_VYTVORIT, ensure_ascii=False)};", js)
 
     def test_inbox_patri_uzivateli(self):
-        inbox = self.t / "_Inbox/Inbox.md"
+        inbox = self.t / "_Vkládání učiva/Vkládání učiva.md"
         inbox.write_text(inbox.read_text() + "\n![[moje.pdf]]\n")
         self.zestarni()
         self.spust(DM_REZIM="aktualizace", DM_CIL=str(self.t))
         self.assertIn("![[moje.pdf]]", inbox.read_text())
-        self.assertFalse(list((self.t / "_Inbox").glob("Inbox (*")), "u rozcestníku žádná „nová verze“")
+        self.assertFalse(list((self.t / "_Vkládání učiva").glob("Vkládání učiva (*")), "u rozcestníku žádná „nová verze“")
+
+    def test_stary_inbox_se_prejmenuje(self):
+        """Trezor z 1.0.6: složka i rozcestník se přejmenují před kopírováním, vlastní obsah zůstane a nic nevznikne dvakrát."""
+        nova = self.t / "_Vkládání učiva"
+        shutil.move(str(nova), str(self.t / "_Inbox"))
+        shutil.move(str(self.t / "_Inbox/Vkládání učiva.md"), str(self.t / "_Inbox/Inbox.md"))
+        (self.t / "_Inbox/Inbox.md").write_text("můj rozcestník")
+        (self.t / "_Inbox/material.pdf").write_text("x")
+        self.zestarni()
+        self.spust(DM_REZIM="aktualizace", DM_CIL=str(self.t))
+        self.assertFalse((self.t / "_Inbox").exists())
+        self.assertEqual((nova / "Vkládání učiva.md").read_text(), "můj rozcestník")
+        self.assertTrue((nova / "material.pdf").exists())
 
     def test_kazdy_soubor_ma_pravidlo(self):
         """Nový soubor v trezor/ musí mít určeno, jak se aktualizuje (jinak by se k lidem nedostal)."""
@@ -731,6 +994,22 @@ class Repozitar(unittest.TestCase):
         r = subprocess.run([sys.executable, str(REPO / "nastroje/kontrolni_soucty.py"), "--kontrola"],
                            capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_soucty_bez_mistniho_nastaveni_claude(self):
+        """Místní nastavení Claude git ignoruje: v součtech by chybělo u každého, kdo si repozitář stáhne."""
+        with tempfile.TemporaryDirectory() as d:
+            koren = Path(d)
+            (koren / "nastroje").mkdir()
+            shutil.copy2(REPO / "nastroje/kontrolni_soucty.py", koren / "nastroje")
+            (koren / "a.txt").write_text("a")
+            for slozka in (koren / ".claude", koren / "trezor/.claude"):
+                slozka.mkdir(parents=True)
+                (slozka / "settings.local.json").write_text("{}")
+            r = subprocess.run([sys.executable, str(koren / "nastroje/kontrolni_soucty.py")], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            soucty = (koren / "SHA256SUMS.txt").read_text()
+            self.assertIn("a.txt", soucty)
+            self.assertNotIn("settings.local.json", soucty)
 
 
 if __name__ == "__main__":

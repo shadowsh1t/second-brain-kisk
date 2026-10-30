@@ -26,3 +26,16 @@
 .druhy-mozek-hlaseni { width: 100%; margin: 4px 0 10px; font-family: var(--font-interface); font-size: 0.9em; }
 .druhy-mozek-nahlasit { margin-top: 6px; font-size: 0.85em; padding: 2px 8px; cursor: pointer; }
 .druhy-mozek-varovani { margin-top: 4px; }
+
+/* interaktivní úkoly */
+.druhy-mozek-ukoly { overflow-x: auto; }
+.druhy-mozek-ukoly table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 0.9em; }
+.druhy-mozek-ukoly th { text-align: left; font-weight: 600; }
+.druhy-mozek-ukoly th, .druhy-mozek-ukoly td { padding: 4px 8px; border-bottom: 1px solid var(--background-modifier-border); }
+.druhy-mozek-ukoly tr.je-hotovo a { text-decoration: line-through; opacity: 0.6; }
+.druhy-mozek-ukoly a { cursor: pointer; }
+.druhy-mozek-ukoly-ovladani { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 6px 0; }
+.druhy-mozek-navrh { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 6px 10px; margin: 4px 0;
+  border-radius: 8px; border: 1px solid var(--background-modifier-border); background: var(--background-secondary); }
+.druhy-mozek-navrh input[type="text"] { flex: 1 1 200px; }
+.druhy-mozek-navrh-zdroj { font-size: 0.85em; opacity: 0.7; }

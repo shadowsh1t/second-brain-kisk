@@ -134,7 +134,7 @@ def pridej(polozky):
         if prehled.exists():
             print(T["predmet_existuje"].format(p=nazev))
             continue
-        for podslozka in ("Poznámky", "Úkoly"):
+        for podslozka in ("Učivo", "Poznámky", "Úkoly", "Organizace"):
             (slozka / podslozka).mkdir(parents=True, exist_ok=True)
         prehled.write_text(sablona(kod, nazev), encoding="utf8")
         print(T["predmet_pridan"].format(p=f"{kod} {nazev}".strip()))

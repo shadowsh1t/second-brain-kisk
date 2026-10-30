@@ -6,14 +6,14 @@ AI k nim jen dopisuje poznámky v Markdownu.
 
 Pravidla z `~/CLAUDE.md` platí, pokud existuje (žádné klíče/hesla). **Výjimka z pravidla „před změnou souborů se zeptej“:**
 když uživatel spustí `/zpracuj`, `/tyden` nebo `/zkouska`, dává tím souhlas k vytváření a úpravám poznámek
-a k přesunu souborů z `_Inbox` do složek předmětů. Mazání je vždy zakázané.
+a k přesunu souborů z `_Vkládání učiva` do složek předmětů. Mazání je vždy zakázané.
 
 ## Jazyk – DŮLEŽITÉ
 
 - Poznámky (nadpisy, text, kartičky, názvy nových poznámek, souhrn na konci) piš v jazyce `jazyk` z `_Systém/nastaveni.json`
   (`cs` čeština, `sk` slovenčina, `en` angličtina, `uk` ukrajinština; chybí-li, tak čeština). Stejným jazykem komunikuj s uživatelem.
 - Materiály v jiném jazyce zpracuj do jazyka poznámek; odborné termíny můžeš v závorce nechat v originále.
-- **Nepřekládej:** názvy složek (`_Inbox`, `_Pojmy`, `_Přehledy`, `_Systém`, `Poznámky`, `Úkoly`…), klíče a hodnoty vlastností
+- **Nepřekládej:** názvy složek (`_Vkládání učiva`, `_Pojmy`, `_Přehledy`, `_Systém`, `Poznámky`, `Úkoly`…), klíče a hodnoty vlastností
   (`typ: prednaska`, `stav: otevreno`…), názvy pohledů v `Studium.base` ani syntaxi `[due:: …]` – systém s nimi počítá.
 - Předpony a texty pro daný jazyk (název úkolu, krok „Odevzdat“) ber z `_Systém/texty.json` (klíče `ukol_prefix`, `odevzdat`).
 
@@ -37,10 +37,12 @@ a k přesunu souborů z `_Inbox` do složek předmětů. Mazání je vždy zaká
 | Cesta | Obsah |
 |---|---|
 | `00 Domov.md` | dashboard (karty se načítají z `_Systém/Studium.base` a `_Systém/Fronta.md`) |
-| `<Předmět>/` | originály od vyučujících + složky úkolů tak, jak je má uživatel |
+| `<Předmět>/Učivo/` | přednášky, slidy, osnovy a texty od vyučujících |
+| `<Předmět>/Organizace/` | podmínky ukončení, seznam literatury, úvodní informace |
+| `<Předmět>/Úkoly/<N> <Název>/` | zadání, práce uživatele a poznámka `Úkol – <název>.md` |
 | `<Předmět>/<Předmět>.md` | přehled předmětu (kód, ukončení, termíny, odkazy) |
 | `<Předmět>/Poznámky/` | poznámky z přednášek a učiva |
-| `_Inbox/` | nové soubory, u kterých není jasné, kam patří |
+| `_Vkládání učiva/` | nové soubory, u kterých není jasné, kam patří |
 | `_Pojmy/` | 1 pojem = 1 krátká poznámka, propojuje předměty |
 | `_Zdroje/` | obecné návody (jak psát esej, reflexi, citovat…) |
 | `_Přehledy/` | týdenní přehledy |
@@ -66,8 +68,8 @@ Kód každého předmětu je ve vlastnosti `kod` jeho přehledu `<Předmět>/<P�
 
 ## Typy poznámek (vlastnost `typ`)
 
-- `prednaska` – výpisky z přednášky/učiva → `<Předmět>/Poznámky/<KÓD> NN – <Téma>.md`
-- `ukol` – zadání úkolu s termínem → do stejné složky jako zadání, název `<ukol_prefix><název>.md` (česky `Úkol – <název>.md`).
+- `prednaska` – výpisky z přednášky/učiva → `<Předmět>/Poznámky/<Téma> – <KÓD>.md`
+- `ukol` – zadání úkolu s termínem → `<Předmět>/Úkoly/<N> <Název>/`, název `<ukol_prefix><název>.md` (česky `Úkol – <název>.md`).
   Vždy s `kod` a `termin`; kroky jako zaškrtávací seznam, poslední krok `- [ ] <odevzdat> [due:: RRRR-MM-DD]`
   (česky `- [ ] Odevzdat do Odevzdávárny v ISu [due:: RRRR-MM-DD]`)
   (čte to plugin **Neuro Roadmap** – Gantt, Horizon, kalendář). Zkoušku zapiš jako úkol s `typ: zkouska`.
@@ -76,7 +78,7 @@ Kód každého předmětu je ve vlastnosti `kod` jeho přehledu `<Předmět>/<P�
 - `zdroj` – obecný návod/článek → `_Zdroje/`
 
 Šablony jsou v `_Systém/Šablony/`, drž se jejich vlastností (frontmatter) – dashboard na nich závisí.
-Datum vždy `YYYY-MM-DD`. Hodnotu s dvojtečkou dej do uvozovek (jinak se vlastnosti rozbijí). `predmet` vždy jako odkaz, např. `"[[Úvod do knihovnictví]]"`. `stav` u úkolu: `otevreno` / `hotovo`.
+Datum vždy `YYYY-MM-DD`. Hodnotu s dvojtečkou dej do uvozovek (jinak se vlastnosti rozbijí). `predmet` vždy jako odkaz, např. `"[[Úvod do knihovnictví]]"`. `stav` u úkolu: `otevreno` / `rozpracovano` / `hotovo`.
 
 ## Poznámka z přednášky obsahuje
 
@@ -90,6 +92,7 @@ Datum vždy `YYYY-MM-DD`. Hodnotu s dvojtečkou dej do uvozovek (jinak se vlastn
 7. `zdroj: "[[název originálu.pptx]]"`
 
 Osnovy a harmonogramy nepiš jako přednášku – vytáhni z nich termíny, podmínky ukončení a témata do přehledu předmětu.
+Ukončení a kredity zapiš i do vlastností `ukonceni` a `kredity` přehledu (tabulka Předměty čte jen je), ne jen do textu.
 Zadání úkolu → poznámka `ukol` s termínem.
 
 ## Canvas (myšlenková mapa na plátně)

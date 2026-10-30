@@ -143,7 +143,7 @@ trezor/
 ├── 00 Domov.md                 přehled s tlačítky a kartami
 ├── 01 Návod.md                 návod k používání
 ├── Příklad předmětu/           vzor složky předmětu (Poznámky/, Úkoly/)
-├── _Inbox/ _Pojmy/ _Přehledy/ _Zdroje/
+├── _Vkládání učiva/ _Pojmy/ _Přehledy/ _Zdroje/
 ├── _Systém/
 │   ├── priprav.py              fronta a spořič tokenů (+ bezpečné --presun, --zmenene, --ukoly)
 │   ├── novy_ukol.py            úkol ve Wordu / převod do šablony

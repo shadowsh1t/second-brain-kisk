@@ -3,7 +3,7 @@
 
   python3 _Systém/novy_ukol.py "<Předmět>" "<Název práce>" [--typ TEXT] [--termin RRRR-MM-DD] [--z-dokumentu cesta.docx]
 
-Vytvoří <Předmět>/Úkoly/<UČO>-<Jméno> <KÓD> <Název>.docx s vyplněnou hlavičkou,
+Vytvoří <Předmět>/Úkoly/<N> <Název>/<UČO>-<Jméno> <KÓD> <Název>.docx s vyplněnou hlavičkou,
 k tomu poznámku úkolu pro Obsidian (Domov i Neuro Roadmap ukážou termín) a otevře dokument ve Wordu.
 S --z-dokumentu vloží text, obrázky, odkazy, číslování a poznámky pod čarou z hotové práce do šablony
 (originál zůstane beze změny). Na výstup vypíše cestu k dokumentu a k poznámce (2 řádky).
@@ -181,10 +181,15 @@ def main():
     if not nazev:
         sys.exit(T["chyba_nazev"])
 
-    cil = slozka / "Úkoly" / f"{bezpecne(f'{PREFIX} {kod} {nazev}')}.docx"
+    ukoly = slozka / "Úkoly"
+    jmeno_docx = f"{bezpecne(f'{PREFIX} {kod} {nazev}')}.docx"
+    if ukoly.is_dir():  # stejný úkol se nezakládá podruhé, ať je v kterékoli složce
+        for stary in ukoly.rglob("*.docx"):
+            if stary.name == jmeno_docx:
+                sys.exit(T["chyba_existuje"].format(p=stary.relative_to(TREZOR)))
+    cisla = [int(m.group(1)) for d in (ukoly.iterdir() if ukoly.is_dir() else []) if d.is_dir() and (m := re.match(r"(\d+) ", d.name))]
+    cil = ukoly / bezpecne(f"{max(cisla, default=0) + 1} {nazev}", 100) / jmeno_docx
     poznamka = cil.parent / f"{T['ukol_prefix']}{nazev}.md"
-    if cil.exists():
-        sys.exit(T["chyba_existuje"].format(p=cil.relative_to(TREZOR)))
 
     # jazyk dokumentů ve Wordu se volí předem v nastavení (jazyk_word); --jazyk je jen výjimka pro jeden úkol
     jazyk_word = NASTAVENI.get("jazyk_word") or NASTAVENI.get("jazyk") or "cs"
@@ -220,7 +225,7 @@ def main():
         except (OSError, zipfile.BadZipFile, KeyError, ValueError, UnicodeDecodeError):
             sys.exit(T["chyba_zdroj"].format(p=bez_ridicich(arg.zdroj)))
 
-    cil.parent.mkdir(exist_ok=True)
+    cil.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(cil, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("[Content_Types].xml", soubory.pop("[Content_Types].xml"))  # musí být první
         for n, data in soubory.items():

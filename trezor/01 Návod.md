@@ -1,7 +1,7 @@
 # 📖 Návod k druhému mozku
 
 > [!tip] Nejkratší verze
-> 1. Nový materiál ze školy ulož do složky předmětu (nebo do `_Inbox`).
+> 1. Nový materiál ze školy ulož do složky předmětu (nebo do `_Vkládání učiva`).
 > 2. Na [[00 Domov|🏠 Domově]] klikni **📥 Zpracovat nové materiály (AI)**.
 > 3. Úkol do Wordu zakládej tlačítkem **📝 Nový úkol ve Wordu**.
 > 4. Po odevzdání otevři poznámku úkolu a klikni **✅ Označit úkol jako odevzdaný**.
@@ -37,9 +37,11 @@ Obě rozšíření čtou **stejné poznámky** – co založíš u nás, vidí i
 | `01 Návod` | tenhle návod |
 | `<Předmět>/` | originály od vyučujících – **nikdy se nemažou ani nepřepisují** |
 | `<Předmět>/<Předmět>.md` | přehled předmětu: kód, vyučující, ukončení, termíny, seznam přednášek a úkolů |
+| `<Předmět>/Učivo/` | přednášky, slidy, osnovy a texty od vyučujících (`IO – Téma – KÓD`, `Téma – KÓD`) |
 | `<Předmět>/Poznámky/` | poznámky z přednášek (vytváří AI, ty dopisuješ *Moje postřehy*) |
-| `<Předmět>/Úkoly/` | tvoje práce ve Wordu + poznámky úkolů (`Úkol – …`) |
-| `_Inbox/` | nové věci, u kterých nevíš, kam patří – AI je roztřídí |
+| `<Předmět>/Úkoly/` | každý úkol má vlastní složku (`1 Název/`): zadání, tvoje práce ve Wordu, poznámka `Úkol – …` |
+| `<Předmět>/Organizace/` | podmínky ukončení, seznam literatury, úvodní informace |
+| `_Vkládání učiva/` | nové věci, u kterých nevíš, kam patří – AI je roztřídí |
 | `_Pojmy/` | 1 pojem = 1 krátká poznámka, propojuje předměty (podívej se do grafu: Cmd+G) |
 | `_Zdroje/` | obecné návody (jak psát esej, citovat…) |
 | `_Přehledy/` | týdenní přehledy |
@@ -53,7 +55,7 @@ Najdeš je **nahoře na Domově**, pod **ikonou 🧠 v levém svislém panelu** 
 
 | Tlačítko | Co udělá | AI? | Kdy použít |
 |---|---|---|---|
-| 📥 **Zpracovat nové materiály** | z nových materiálů udělá poznámky, pojmy, mapy, kartičky; roztřídí `_Inbox` | ✅ | když přibydou přednášky (třeba 1× týdně) |
+| 📥 **Zpracovat nové materiály** | z nových materiálů udělá poznámky, pojmy, mapy, kartičky; roztřídí `_Vkládání učiva` | ✅ | když přibydou přednášky (třeba 1× týdně) |
 | 🔎 **Co čeká na zpracování** | ukáže frontu a kolik to bude stát tokenů | ❌ zdarma | kdykoli |
 | ✔️ **Označit materiál jako zpracovaný** | ruční odškrtnutí materiálu ve frontě | ❌ | když zpracováváš bez AI |
 | 📝 **Nový úkol ve Wordu** | formulář → dokument ze šablony KISK (v jazyce Wordu) + poznámka úkolu + termín | ❌ | když začínáš psát úkol |
@@ -141,7 +143,7 @@ Rozšíření zálohuje trezor samo – nemusíš na nic myslet.
 
 ### 📚 Nový semestr – přidat nebo odebrat předmět
 1. **📚 Přidat předmět** (ikona 🧠 v levém panelu, **Cmd+P**, nebo **⚙️ Nastavení → Předměty**) → vyplň kód (např. `ISKB02`) a název → **Přidat**.
-2. Vznikne složka předmětu s podsložkami `Poznámky` a `Úkoly` a přehled předmětu. Předmět se hned objeví na Domově, ve výběru u úkolů ve Wordu, v plánu i v levém panelu (s kódem a oranžovým pruhem).
+2. Vznikne složka předmětu s podsložkami `Učivo`, `Poznámky`, `Úkoly` a `Organizace` a přehled předmětu. Předmět se hned objeví na Domově, ve výběru u úkolů ve Wordu, v plánu i v levém panelu (s kódem a oranžovým pruhem).
 3. **Odebrání:** **⚙️ Nastavení → Předměty → 🗑 Odebrat** → potvrď. Celá složka předmětu jde **do koše v macOS** – dokud ho nevysypeš, můžeš ji vrátit.
 
 ### 🔄 Vyšla nová verze
@@ -153,7 +155,7 @@ Rozšíření zálohuje trezor samo – nemusíš na nic myslet.
 **Poznámky, materiály, předměty, nastavení a CSS předmětů zůstanou.** Systémové poznámky (Domov, Návod, šablony), do kterých jsi psal, se nepřepíšou – nová verze se uloží vedle s příponou „(nová verze)“. Když se instalace pokazí, změny se samy vrátí. **Pro případ nouze:** 7 dní je v **⚙️ Nastavení → Aktualizace** tlačítko **↩️ Vrátit poslední aktualizaci**; pak jde dočasná záloha (skrytá složka `.druhy-mozek-zaloha`) do koše.
 
 ### 📚 Přibyla přednáška / materiál
-1. Stáhni ho z ISu do složky předmětu (nebo do `_Inbox`). Fronta se přepočítá sama.
+1. Stáhni ho z ISu do složky předmětu (nebo do `_Vkládání učiva`). Fronta se přepočítá sama.
 2. Na Domově vidíš v kartě **📥 Čeká na zpracování**, kolik toho čeká.
 3. Klikni **📥 Zpracovat nové materiály** → v Terminálu sleduj, co AI dělá (zpracuje max. 8 souborů a zeptá se, jestli pokračovat).
 4. Výsledek: poznámka v `<Předmět>/Poznámky/`, nové pojmy v `_Pojmy`, doplněný přehled předmětu. Zadání úkolů se rovnou objeví v termínech.

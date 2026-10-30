@@ -43,7 +43,7 @@ UZIVATELSKE = [".obsidian/snippets/druhy-mozek-predmety.css"]
 # takže by vypadaly jako upravené; Domov odkazuje na jejich pohledy)
 VZDY_NAHRADIT = ["_Systém/Studium.base"]
 # rozcestníky z jazykového balíčku patří uživateli (přetahuje do nich soubory) – jen vytvořit, když chybí
-JEN_VYTVORIT = ["_Inbox/Inbox.md", "_Pojmy/Pojmy.md", "_Přehledy/Přehledy.md"]
+JEN_VYTVORIT = ["_Vkládání učiva/Vkládání učiva.md", "_Pojmy/Pojmy.md", "_Přehledy/Přehledy.md"]
 UKAZKA = "Příklad předmětu/"
 
 
@@ -107,6 +107,10 @@ def aktualizuj(cil, jen_zapis=False):
     jazyk = nastaveni.get("jazyk") if nastaveni.get("jazyk") in PRIPONA else "cs"
     nova, stara = verze(ZDROJ.parent / "trezor" / MANIFEST), verze(cil / MANIFEST)
     soubory = nove_soubory(jazyk)
+    if not jen_zapis and (cil / "_Inbox").is_dir() and not (cil / "_Inbox").is_symlink() and not (cil / "_Vkládání učiva").exists():
+        (cil / "_Inbox").rename(cil / "_Vkládání učiva")  # do 1.0.6 se složka jmenovala _Inbox; zbytek dořeší priprav.py
+        if (cil / "_Vkládání učiva/Inbox.md").is_file():
+            (cil / "_Vkládání učiva/Inbox.md").rename(cil / "_Vkládání učiva/Vkládání učiva.md")
     if jen_zapis:
         zapis_evidenci(cil, soubory, nova, jazyk)
         return {"verze": nova}

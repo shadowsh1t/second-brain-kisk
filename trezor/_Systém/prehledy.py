@@ -84,11 +84,15 @@ def poznamka(material):
     kod = seznam[predmet]
     slozka = TREZOR / predmet / "Poznámky"
     slozka.mkdir(parents=True, exist_ok=True)
-    cisla = [int(m.group(1)) for f in slozka.glob("*.md") if (m := re.match(rf"^{re.escape(kod)}\s*(\d+)\b", f.stem))] if kod else []
-    nn = max(cisla, default=0) + 1
     nazev = re.sub(r"\s+", " ", re.sub(r"[_]+", " ", zdroj.stem)).strip()
     nazev = re.sub(r'[/\\:*?"<>|#^\[\]]', "-", nazev)[:80]
-    jmeno = f"{kod} {nn:02d} – {nazev}" if kod else f"{nn:02d} – {nazev}"
+    nazev = re.sub(r"^IO – ", "", nazev)  # poznámka patří k tématu: bez druhu a bez kódu z názvu materiálu
+    nazev = re.sub(rf" – {re.escape(kod)}$", "", nazev) if kod else nazev
+    jmeno = f"{nazev} – {kod}" if kod else nazev
+    pokus = 1
+    while (slozka / f"{jmeno}.md").exists():  # IO a slidy k témuž tématu: druhá poznámka vedle
+        pokus += 1
+        jmeno = f"{nazev} ({pokus}) – {kod}" if kod else f"{nazev} ({pokus})"
     sablona = (TREZOR / "_Systém" / "Šablony" / "Přednáška.md").read_text(encoding="utf8")
     hlava, telo = sablona.split("---", 2)[1:]
     nastav = {"predmet": json.dumps(f"[[{predmet}]]", ensure_ascii=False), "kod": kod,

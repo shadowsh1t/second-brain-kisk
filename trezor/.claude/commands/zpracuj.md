@@ -4,8 +4,10 @@ description: Zpracuje nové materiály do poznámek v Obsidianu (šetrně k toke
 Zpracuj nové studijní materiály podle `.claude/CLAUDE.md`.
 
 1. Spusť `python3 _Systém/priprav.py` (přesně takhle – relativní cesta, bez pipe) a přečti `_Systém/fronta.json`. Když je fronta prázdná, napiš to a skonči.
-2. Soubory z `_Inbox/`: podle obsahu cache urči předmět, přesuň originál příkazem
-   `python3 _Systém/priprav.py --presun "_Inbox/<soubor>" "<Předmět>"` (ne `mv`) a spusť `priprav.py` znovu.
+2. Soubory z `_Vkládání učiva/` a soubory ležící přímo v kořeni předmětu: podle cache urči předmět a název z nadpisu dokumentu
+   (`python3 _Systém/priprav.py --navrh "<soubor>"` dá návrh) a zařaď je příkazem
+   `python3 _Systém/priprav.py --presun "<soubor>" "<Předmět>" "<Název>"` (ne `mv`), pak spusť `priprav.py` znovu.
+   Název: `Téma – KÓD`, u interaktivní osnovy `IO – Téma – KÓD` (přípona se doplní sama). Zadání úkolu nezařazuj do Učiva, patří k úkolu.
 3. Pro každou položku fronty (nejdřív zadání úkolů a osnovy, pak učivo):
    - přečti jen cache (originál nebo `obrazky` jen podle pravidel v CLAUDE.md); tabulky, data grafů, `[poznámky řečníka]`
      a `[odkazy]` v cache patří do výpisků,

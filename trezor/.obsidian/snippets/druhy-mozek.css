@@ -46,7 +46,7 @@
 progress { accent-color: rgb(97, 175, 239); border-radius: 6px; }
 
 /* --- Barevné složky v levém panelu --- */
-.nav-folder-title[data-path="_Inbox"],
+.nav-folder-title[data-path="_Vkládání učiva"],
 .nav-folder-title[data-path="_Pojmy"],
 .nav-folder-title[data-path="_Zdroje"],
 .nav-folder-title[data-path="_Přehledy"],
@@ -55,14 +55,14 @@ progress { accent-color: rgb(97, 175, 239); border-radius: 6px; }
   border-radius: 8px; font-weight: 700; margin: 2px 0;
 }
 .nav-file-title[data-path="00 Domov.md"]        { background: rgba(224, 108, 117, 0.55); }
-.nav-folder-title[data-path="_Inbox"]           { background: rgba(224, 108, 117, 0.35); }
+.nav-folder-title[data-path="_Vkládání učiva"]           { background: rgba(224, 108, 117, 0.35); }
 .nav-folder-title[data-path="_Pojmy"]           { background: rgba(229, 192, 123, 0.45); }
 .nav-folder-title[data-path="_Zdroje"]          { background: rgba(86, 182, 194, 0.40); }
 .nav-folder-title[data-path="_Přehledy"]        { background: rgba(152, 195, 121, 0.40); }
 .nav-folder-title[data-path="_Systém"]          { background: rgba(120, 140, 170, 0.35); }
 
 .nav-file-title[data-path="00 Domov.md"] .nav-file-title-content::before { content: "🏠 "; }
-.nav-folder-title[data-path="_Inbox"]    .nav-folder-title-content::before { content: "📥 "; }
+.nav-folder-title[data-path="_Vkládání učiva"]    .nav-folder-title-content::before { content: "📥 "; }
 .nav-folder-title[data-path="_Pojmy"]    .nav-folder-title-content::before { content: "🧠 "; }
 .nav-folder-title[data-path="_Zdroje"]   .nav-folder-title-content::before { content: "📖 "; }
 .nav-folder-title[data-path="_Přehledy"] .nav-folder-title-content::before { content: "🗓 "; }

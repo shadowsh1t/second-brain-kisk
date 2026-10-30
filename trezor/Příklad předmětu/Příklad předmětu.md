@@ -26,7 +26,9 @@ tags:
 ![[Studium.base#Přednášky předmětu]]
 
 ## Úkoly
-![[Studium.base#Úkoly předmětu]]
+```druhy-mozek-ukoly
+predmet
+```
 
 ## Odevzdáno
 

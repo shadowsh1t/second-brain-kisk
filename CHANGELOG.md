@@ -3,6 +3,13 @@
 All notable changes to Second Brain for KISK. The newest version is at the top.
 When a new version is released, Obsidian offers it under **🆕 A new version of Second Brain is available** with a link to this list.
 
+## 1.1.0 – 2026-10-30
+
+- **Interactive assignment table** – Home and each course overview show assignments in a table where you can filter them, search, change the deadline and status, and show finished ones. New assignments found in your materials are offered with **Add** and **Ignore**, and an assignment that looks finished is offered as done.
+- **New course structure** – a course now has `Učivo`, `Poznámky`, `Úkoly` and `Organizace`, and each assignment has its own folder `Úkoly/<N> <Name>/`. The new **📂 File into a course** window suggests the course and name from the text of the material.
+- **`_Inbox` is now `_Vkládání učiva`** – your folder, its note, links on Home and the queue records move over automatically and your own text stays. After updating, quit Obsidian completely and open it again so the new version loads.
+- **Better duplicate detection** – a moved file keeps its state instead of being reported as a duplicate, and old false duplicates are repaired. The queue also lists files with very similar text; nothing is deleted, and you can choose to keep both.
+
 ## 1.0.6 – 2026-10-18
 
 - Fixed: courses whose names contain diacritics (e.g. *Úvod do knihovnictví*) now get the orange bar and the course code in the left panel too – before, only names without diacritics did, because macOS reports folder names in a different Unicode form than Obsidian uses.

@@ -9,7 +9,11 @@ Použití:
   python3 _Systém/priprav.py                 # aktualizuje cache a frontu, vypíše souhrn
   python3 _Systém/priprav.py --hotovo CESTA  # označí soubor jako zpracovaný
   python3 _Systém/priprav.py --preskoc CESTA # označí soubor jako přeskočený (vlastní práce, osnova…)
-  python3 _Systém/priprav.py --presun SOUBOR PŘEDMĚT  # přesune soubor z _Inbox do složky předmětu
+  python3 _Systém/priprav.py --presun SOUBOR PŘEDMĚT [NÁZEV]  # zařadí soubor do <Předmět>/Učivo
+  python3 _Systém/priprav.py --pridej-ukol SOUBOR PŘEDMĚT NÁZEV [TERMÍN]  # úkol z nalezeného zadání
+  python3 _Systém/priprav.py --ignoruj KLÍČ  # návrh úkolu nebo „hotovo“ už nenabízet
+  python3 _Systém/priprav.py --navrh SOUBOR  # navrhne předmět a název podle textu (JSON)
+  python3 _Systém/priprav.py --nechat A B    # dvojice možných duplicit: nechat obě, příště neukazovat
   python3 _Systém/priprav.py --zmenene 7     # poznámky změněné za posledních N dní
   python3 _Systém/priprav.py --ukoly         # otevřené úkoly s termíny
 
@@ -18,6 +22,7 @@ Bezpečné náhrady za mv/find, aby AI nepotřebovala obecné příkazy shellu.
 import fcntl
 import hashlib
 import html
+import itertools
 import json
 import plistlib
 import posixpath
@@ -45,7 +50,20 @@ VELKE = 30_000  # odhad tokenů, od kterého se soubor zpracuje jen jako shrnut�
 DAVKA = 8  # položek na jedno /zpracuj (stejné číslo je v .claude/commands/zpracuj.md)
 VYSTUP = 4_000  # odhad tokenů na napsání poznámky, pojmů a kartiček k jedné položce
 MAX_CAST = 50_000_000  # max. velikost jedné rozbalené části pptx/docx (ochrana proti zip bombě)
+INBOX = "_Vkládání učiva"
 NASTAVENI = SYS / "nastaveni.json"
+UKOLY_IGNOROVAT = SYS / "ukoly_ignorovat.json"  # návrhy, které uživatel odmítl
+PRACE_SLOV = 200  # dokument ze šablony s méně slovy je ještě prázdný
+ZADANI = re.compile(r"(?:vaším úkolem bude|zadání\s+(?:\w+\s+){0,2}úkolu(?:\s+č\.?\s*\d+)?|(?:povinný\s+)?domácí\s+úkol(?:\s+č\.?\s*\d+)?|"
+                    r"povinný\s+úkol(?:\s+č\.?\s*\d+)?|zadání\s+portfolia|odpovědník\s+na\s+\d+\s+otázk\w*|termín\s+odevzdání|your\s+assignment|assignment\s+brief)", re.I)
+ODEVZDANI = re.compile(r"odevzd|nejpozději|deadline|termín|submit|due\b", re.I)
+DATUM = re.compile(r"\b(\d{1,2})\.\s*(\d{1,2})\.\s*(20\d\d)\b")
+MESICE = {m: i for i, ms in enumerate(("ledna januára", "února februára", "března marca", "dubna apríla", "května mája", "června júna", "července júla",
+                                       "srpna augusta", "září septembra", "října októbra", "listopadu novembra", "prosince decembra"), 1) for m in ms.split()}
+DATUM_SLOVEM = re.compile(r"\b(\d{1,2})\.\s*(" + "|".join(MESICE) + r")(?:\s+(20\d\d))?", re.I)
+DUPLICITY_NECHAT = SYS / "duplicity_nechat.json"  # dvojice otisků, které si uživatel nechává
+PODOBNOST_SLOV = 50_000  # víc slov z jednoho souboru se neporovnává
+PODOBNOST_MIN = 30  # kratší text (titulní strana) by dával falešné shody
 try:
     _UCO = str(json.loads(NASTAVENI.read_text()).get("uco") or "")
 except Exception:  # chybějící nebo poškozené nastavení – skripty běží dál, jen nepoznají vlastní práce podle UČO
@@ -504,9 +522,68 @@ def oznac(cesta, stav):
     print(f"{stav}: {rel}")
 
 
+def ciste_jmeno(rel):
+    return re.sub(r"[\x00-\x1f\x7f|`]", " ", rel)
+
+
+def najdi_duplicity(reg):
+    """Stejné soubory (hash) a soubory s podobným textem (4 slova za sebou) – jen k zobrazení, nic se nemaže."""
+    try:
+        nechat = {frozenset(x) for x in json.loads(DUPLICITY_NECHAT.read_text())}
+    except (OSError, ValueError, TypeError):
+        nechat = set()
+    vysledek = []
+    for k, v in sorted(reg.items()):
+        if v["stav"] == "duplicita" and v.get("stejne_jako") in reg:
+            if frozenset((v["otisk"],)) not in nechat:
+                vysledek.append({"typ": "stejne", "a": v["stejne_jako"], "b": k, "shoda": 100})
+    texty_souboru = {}
+    for k, v in sorted(reg.items()):
+        c = CACHE / f"{v['otisk'][:16]}.md"
+        if v["stav"] == "duplicita" or not c.exists():
+            continue
+        slova = re.findall(r"\w{2,}", c.read_text(errors="ignore").split("\n", 1)[-1].lower())[:PODOBNOST_SLOV]
+        ctverice = {" ".join(slova[i:i + 4]) for i in range(max(0, len(slova) - 3))}
+        if len(ctverice) >= PODOBNOST_MIN:
+            texty_souboru[k] = (v["otisk"], ctverice)
+    for a, b in itertools.combinations(sorted(texty_souboru), 2):
+        (oa, ta), (ob, tb) = texty_souboru[a], texty_souboru[b]
+        if oa == ob or frozenset((oa, ob)) in nechat:
+            continue
+        spolecne = len(ta & tb)
+        jaccard, obsazeni = spolecne / len(ta | tb), spolecne / min(len(ta), len(tb))
+        if jaccard >= 0.5 or obsazeni >= 0.8:
+            vysledek.append({"typ": "podobne", "a": a, "b": b, "shoda": round(max(jaccard, obsazeni) * 100)})
+    return vysledek
+
+
+def nechat_obe(a, b):
+    """Dvojici si uživatel prohlédl a chce nechat obě – příště se neukáže."""
+    reg = nacti_registr()
+    if nfc(a) not in reg or nfc(b) not in reg:
+        sys.exit(f"Soubor není v registru: {a!r} nebo {b!r}")
+    try:
+        nechat = json.loads(DUPLICITY_NECHAT.read_text())
+    except (OSError, ValueError):
+        nechat = []
+    nechat.append(sorted({reg[nfc(a)]["otisk"], reg[nfc(b)]["otisk"]}))
+    DUPLICITY_NECHAT.write_text(json.dumps(nechat))
+
+
 def prehled():
     CACHE.mkdir(parents=True, exist_ok=True)
     reg = nacti_registr()
+    existujici = {rel for _, rel in materialy()}
+    # starší registr: „duplicita“ souboru, který už neexistuje (přesunutý originál) → soubor přebírá jeho roli
+    zive = {v["otisk"]: k for k, v in reg.items() if k in existujici and v["stav"] in ("hotovo", "preskoceno")}
+    for k, v in reg.items():
+        if v["stav"] == "duplicita" and k in existujici and v.get("stejne_jako") not in existujici:
+            if v["otisk"] in zive:
+                v["stejne_jako"] = zive[v["otisk"]]
+            else:
+                v["stav"] = "hotovo"
+                v.pop("stejne_jako", None)
+                zive[v["otisk"]] = k
     hotove_otisky = {v["otisk"]: k for k, v in reg.items() if v["stav"] in ("hotovo", "preskoceno")}
     fronta, uspora_puvodni, uspora_cista, videne = [], 0, 0, {}
 
@@ -518,6 +595,10 @@ def prehled():
         h = zaznam["otisk"] if stejny else otisk(p)
         if zaznam and zaznam["otisk"] == h and zaznam["stav"] != "ceka":
             zaznam.update(podpis(p))
+            continue
+        if h in hotove_otisky and hotove_otisky[h] not in existujici:  # přesunutý nebo přejmenovaný soubor: stav jde s ním
+            reg[rel] = {**reg[hotove_otisky[h]], **podpis(p)}
+            hotove_otisky[h] = rel
             continue
         if h in hotove_otisky and hotove_otisky[h] != rel:
             reg[rel] = {"otisk": h, "stav": "duplicita", "datum": date.today().isoformat(),
@@ -573,7 +654,7 @@ def prehled():
             puvodni = 1600 if typ == "obrázek" else t + (bloku * 1500 if typ in ("pdf", "prezentace") else 0)
             uspora_puvodni += puvodni
             uspora_cista += t
-            polozka.update(typ=typ, tokeny=t, slova=len(text.split()), cache=str(cil.relative_to(TREZOR)), poznamka=poznamka)
+            polozka.update(typ=typ, tokeny=t, slova=len(text.split("\n", 1)[-1].split()), bloky=bloku, cache=str(cil.relative_to(TREZOR)), poznamka=poznamka)
             if obrazove:
                 polozka["obrazove"] = obrazove[:50]
             if slozka.is_dir():
@@ -583,22 +664,36 @@ def prehled():
         fronta.append(polozka)
 
     # záznamy smazaných souborů už nepotřebujeme
-    existujici = {rel for _, rel in materialy()}
     for rel in [k for k in reg if k not in existujici]:
         del reg[rel]
     uloz_registr(reg)
+    duplicity = najdi_duplicity(reg)
+    (SYS / "duplicity.json").write_text(json.dumps(duplicity, ensure_ascii=False, indent=1))
+    ignorovane = nacti_ignorovane()
+    ukoly_predmetu = {}
+    for p_u, rel_u in poznamky():
+        fm_u = frontmatter(p_u)
+        if fm_u.get("typ") in ("ukol", "zkouska"):
+            ukoly_predmetu.setdefault(rel_u.split("/")[0], []).append((slova_nazvu(p_u.stem), fm_u.get("zdroj", "")))
+    (SYS / "ukoly_navrhy.json").write_text(json.dumps({"nove": najdi_nove_ukoly(reg, ignorovane, ukoly_predmetu),
+                                                       "hotove": najdi_hotove(ignorovane)}, ensure_ascii=False, indent=1))
 
     stavy = Counter(v["stav"] for v in reg.values())
     vyrizeno = stavy["hotovo"] + stavy["preskoceno"] + stavy["duplicita"]
     celkem = vyrizeno + len(fronta)
     T = texty()
     cislo = lambda n: f"{n:,}".replace(",", " ")
-    # bez AI nemají tokeny smysl → místo nich odhad času čtení (~200 slov za minutu)
+    # bez AI nemají tokeny smysl → místo nich rozsah materiálu
     try:
         bez_ai = json.loads(NASTAVENI.read_text()).get("ai") == "zadna"
     except Exception:
         bez_ai = False
-    minuty = lambda f: max(1, round(f.get("slova", 0) / 200))
+    def rozsah(f):  # bez AI: kolik toho je, ne odhad času
+        if f["typ"] == "prezentace":
+            return T["rozsah_slidy"].format(n=f.get("bloky", 0))
+        if f["typ"] == "pdf":
+            return T["rozsah_strany"].format(n=f.get("bloky", 0))
+        return T["rozsah_obrazek"] if f["typ"] == "obrázek" else T["rozsah_slova"].format(n=f.get("slova", 0))
     # /zpracuj vezme najednou DAVKA položek; k přečtení se přičte i psaní poznámek a pojmů (VYSTUP na položku)
     davek = -(-len(fronta) // DAVKA)
     odhad_celkem = sum(f["tokeny"] for f in fronta) + len(fronta) * VYSTUP
@@ -609,7 +704,7 @@ def prehled():
     radky = [
         f"# {T['fronta_nadpis']}", "",
         f"## {T['souhrn']}",
-        (T["ceka_rucne"].format(n=len(fronta), m=sum(minuty(f) for f in fronta)) if bez_ai
+        (T["ceka_rucne"].format(n=len(fronta)) if bez_ai
          else T["ceka"].format(n=len(fronta), t=cislo(sum(f["tokeny"] for f in fronta)))) if fronta else T["nic_neceka"],
         "",
         *([T["davky"].format(d=davek, t=cislo(odhad_celkem)), ""] if fronta and not bez_ai else []),
@@ -623,9 +718,14 @@ def prehled():
         radky += [T["tabulka_rucne"] if bez_ai else T["tabulka"], "|---|---|---|---:|---|"]
         for f in fronta:
             typ = T.get("typ_" + f["typ"], f["typ"])
-            mnozstvi = T["minuty"].format(n=minuty(f)) if bez_ai else cislo(f["tokeny"])
+            mnozstvi = rozsah(f) if bez_ai else cislo(f["tokeny"])
             pozn = "" if bez_ai and f["poznamka"].startswith(("VELKÉ", "AI přečte", "OCR", "SKEN (OCR)")) else preloz(f["poznamka"])
             radky.append(f"| {Path(f['soubor']).name.replace('|', '/')} | {f['predmet']} | {typ} | {mnozstvi} | {pozn} |")
+    if duplicity:
+        radky += ["", f"## {T['duplicity_nadpis']}", T["duplicity_rada"], ""]
+        for d in duplicity:
+            druh = T["duplicity_stejne"] if d["typ"] == "stejne" else T["duplicity_podobne"].format(s=d["shoda"])
+            radky.append(f"- {ciste_jmeno(d['a'])} ↔ {ciste_jmeno(d['b'])} ({druh})")
     FRONTA.write_text("\n".join(radky) + "\n")
     (SYS / "fronta.json").write_text(json.dumps(fronta, ensure_ascii=False, indent=1))
 
@@ -637,19 +737,262 @@ def prehled():
         for f in fronta:
             print(f"  - [{f['typ']}] {f['soubor']} (~{f['tokeny']} tok.) {f['poznamka']}")
 
-def presun(soubor, predmet):
-    inbox = (TREZOR / "_Inbox").resolve()
+def ciste_jmeno_souboru(nazev):
+    nazev = re.sub(r'[\\/:*?"<>|#^\[\]]', "-", re.sub(r"[\x00-\x1f\x7f]+", " ", nazev)).strip()
+    return nazev.encode("utf8")[:200].decode("utf8", "ignore").strip().lstrip(".").strip()
+
+
+def presun(soubor, predmet, nazev=None):
+    """Zařadí materiál do <Předmět>/Učivo: z vkládací složky nebo z kořene předmětu, volitelně s novým názvem."""
+    inbox = (TREZOR / INBOX).resolve()
     zdroj = (TREZOR / soubor).resolve()
     cilova = (TREZOR / predmet).resolve()
-    if zdroj.parent != inbox or not zdroj.is_file():
-        sys.exit("Přesouvat jde jen soubory přímo z _Inbox.")
     if cilova.parent != TREZOR.resolve() or not (cilova / f"{cilova.name}.md").exists():
         sys.exit(f"Neznámý předmět: {predmet}")
-    cil = cilova / zdroj.name
+    rozcestniky = {inbox / f"{INBOX[1:]}.md", cilova / f"{cilova.name}.md"}
+    if zdroj.parent not in (inbox, cilova) or not zdroj.is_file() or zdroj in rozcestniky:
+        sys.exit(f"Zařadit jde jen soubory přímo z {INBOX} nebo z kořene předmětu.")
+    jmeno = zdroj.name
+    if nazev is not None:
+        cisty = ciste_jmeno_souboru(nazev[:-len(zdroj.suffix)] if zdroj.suffix and nazev.endswith(zdroj.suffix) else nazev)
+        if not cisty:
+            sys.exit("Název nesmí být prázdný.")
+        jmeno = cisty + zdroj.suffix
+    cil = cilova / "Učivo" / jmeno
     if cil.exists():
-        sys.exit(f"V předmětu už soubor {zdroj.name} je – nepřepisuju ho.")
+        sys.exit(f"V předmětu už soubor {jmeno} je – nepřepisuju ho.")
+    cil.parent.mkdir(exist_ok=True)
     shutil.move(str(zdroj), str(cil))
     print(f"přesunuto: {nfc(str(cil.relative_to(TREZOR.resolve())))}")
+
+
+def navrh(soubor):
+    """Návrh předmětu a názvu podle textu v cache – jen návrh, rozhoduje uživatel nebo AI. Nic se nezapisuje."""
+    import predmety
+    p = (TREZOR / soubor).resolve()
+    if not p.is_relative_to(TREZOR.resolve()) or not p.is_file():
+        sys.exit(f"Soubor v trezoru neexistuje: {soubor!r}")
+    zaznam = nacti_registr().get(nfc(str(p.relative_to(TREZOR.resolve()))), {})
+    c = CACHE / f"{zaznam.get('otisk', '')[:16]}.md"
+    text = c.read_text(errors="ignore").split("\n", 1)[-1] if zaznam and c.exists() else ""
+    zacatek = nfc(text[:3000]).casefold()
+    seznam = predmety.seznam()
+    nalezeny = next((x for x in seznam if x["kod"] and x["kod"].casefold() in (zacatek + " " + nfc(p.stem).casefold())), None)
+    nalezeny = nalezeny or next((x for x in seznam if x["nazev"].casefold() in zacatek), None)
+    kod = nalezeny["kod"] if nalezeny else ""
+    je_io = "interaktivní osnova" in zacatek[:500] or "učitel doporučuje studovat" in text.casefold()
+    preskoc = re.compile(r"^(interaktivní osnova|anotace|menu|úvodní vymezení|\[text z|(mgr|bc|ing|phdr|doc|prof|dr)\.)", re.I)
+    titul = ""
+    for r in (x.strip() for x in text.splitlines()):
+        if kod:  # „Zadání portfolia ISKB08“ → nadpis bez kódu; sám kód nadpis není
+            r = re.sub(re.escape(kod), "", r, flags=re.I).strip(" –-:")
+        r = re.split(r":\s|(?<=\w{4})\.\s", r.lstrip("#• "))[0].rstrip(" .:?!")  # jen první část víceřádkového nebo dlouhého nadpisu
+        if (4 <= len(r) <= 70 and not r.startswith("===") and not preskoc.match(r) and re.search(r"[^\W\d_]{3}", r)
+                and not (nalezeny and nfc(r).casefold() == nalezeny["nazev"].casefold())):
+            titul = r
+            break
+    if not titul:  # bez textu aspoň uklizený název souboru
+        titul = re.sub(r"^\d+[\s._-]*|\s*\(\d+\)$", "", re.sub(r"[_]+", " ", p.stem)).strip() or p.stem
+    jmeno = ciste_jmeno_souboru(f"{'IO – ' if je_io else ''}{titul}{' – ' + kod if kod else ''}")
+    print(json.dumps({"predmet": nalezeny["nazev"] if nalezeny else "", "nazev": jmeno, "io": je_io}, ensure_ascii=False))
+
+
+def migruj_inbox():
+    """Starší trezor: _Inbox → _Vkládání učiva. Bezpečné spouštět pořád: co už je hotové, nic nedělá."""
+    stara, nova = TREZOR / "_Inbox", TREZOR / INBOX
+    if nova.is_symlink() or stara.is_symlink():
+        return
+    if stara.is_dir():
+        if not nova.exists():
+            stara.rename(nova)
+        else:  # rozšíření mezitím založilo novou složku: přesunout, nic nepřepsat
+            for f in sorted(stara.iterdir()):
+                cil = nova / ("Vkládání učiva.md" if f.name == "Inbox.md" else f.name)
+                if f.name == ".DS_Store":
+                    f.unlink()
+                elif f.name == "Inbox.md" or not cil.exists():  # vlastní rozcestník má přednost před čerstvou šablonou
+                    f.replace(cil)
+            if not any(stara.iterdir()):
+                stara.rmdir()
+        if (nova / "Inbox.md").is_file():
+            (nova / "Inbox.md").replace(nova / "Vkládání učiva.md")
+    if REGISTR.exists():
+        text = REGISTR.read_text(encoding="utf8")
+        if '"_Inbox/' in text:
+            try:
+                reg = json.loads(text)
+            except ValueError:
+                reg = None
+            if isinstance(reg, dict):
+                prevod = lambda x: INBOX + x[len("_Inbox"):] if isinstance(x, str) and x.startswith("_Inbox/") else x
+                for v in reg.values():
+                    if isinstance(v, dict) and "stejne_jako" in v:
+                        v["stejne_jako"] = prevod(v["stejne_jako"])
+                uloz_registr({prevod(k): v for k, v in reg.items()})
+    domov = TREZOR / "00 Domov.md"
+    if domov.is_file() and not domov.is_symlink():
+        text = domov.read_text(encoding="utf8", errors="surrogateescape")
+        novy = text.replace("[[Inbox|", "[[Vkládání učiva|").replace("[[Inbox]]", "[[Vkládání učiva]]").replace("`_Inbox`", f"`{INBOX}`")
+        if novy != text:
+            domov.write_text(novy, encoding="utf8", errors="surrogateescape")
+    if domov.is_file() and not domov.is_symlink():
+        text = domov.read_text(encoding="utf8", errors="surrogateescape")
+        novy = text.replace("> > ![[Studium.base#Nejbližší termíny]]", "> > ```druhy-mozek-ukoly\n> > ```")
+        if novy != text:
+            domov.write_text(novy, encoding="utf8", errors="surrogateescape")
+    for d in TREZOR.iterdir():  # tabulka úkolů v přehledu předmětu → interaktivní
+        prehled = d / f"{d.name}.md"
+        if d.is_dir() and not d.name.startswith((".", "_")) and prehled.is_file() and not prehled.is_symlink():
+            text = prehled.read_text(encoding="utf8", errors="surrogateescape")
+            novy = text.replace("![[Studium.base#Úkoly předmětu]]", "```druhy-mozek-ukoly\npredmet\n```")
+            if novy != text:
+                prehled.write_text(novy, encoding="utf8", errors="surrogateescape")
+    app = TREZOR / ".obsidian/app.json"
+    if app.is_file() and not app.is_symlink():
+        try:
+            data = json.loads(app.read_text(encoding="utf8"))
+        except ValueError:
+            data = None
+        if isinstance(data, dict) and data.get("newFileFolderPath") == "_Inbox":
+            data["newFileFolderPath"] = INBOX
+            app.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf8")
+
+
+def nacti_ignorovane():
+    try:
+        return set(json.loads(UKOLY_IGNOROVAT.read_text()))
+    except (OSError, ValueError, TypeError):
+        return set()
+
+
+def ignoruj(klic):
+    """Návrh úkolu nebo „hotovo“, který uživatel odmítl, se už nenabízí."""
+    if not re.fullmatch(r"[\w:./ –()-]{1,500}", klic):
+        sys.exit("Neplatný klíč.")
+    UKOLY_IGNOROVAT.write_text(json.dumps(sorted(nacti_ignorovane() | {klic}), ensure_ascii=False))
+
+
+def slova_nazvu(text):
+    return {w for w in re.findall(r"\w{3,}", nfc(text).casefold()) if w not in ("úkol", "ukol", "zadání", "zadani")}
+
+
+def najdi_datum(radek):
+    """První datum v řádku jako RRRR-MM-DD: 16. 12. 2026, 25. října 2026 i 11. října (bez roku = nejbližší další)."""
+    try:
+        d = DATUM.search(radek)
+        if d:
+            return date(int(d.group(3)), int(d.group(2)), int(d.group(1))).isoformat()
+        d = DATUM_SLOVEM.search(radek)
+        if d:
+            mesic, den = MESICE[d.group(2).lower()], int(d.group(1))
+            dnes = date.today()
+            rok = int(d.group(3)) if d.group(3) else dnes.year + (1 if date(dnes.year, mesic, den) < dnes else 0)
+            return date(rok, mesic, den).isoformat()
+    except ValueError:
+        pass
+    return ""
+
+
+def najdi_nove_ukoly(reg, ignorovane, ukoly_predmetu):
+    """Zadání v textu materiálů (bez AI): jen návrhy, přidává je uživatel. Text z dokumentu jsou data, nic se z něj nespouští."""
+    nove = []
+    for rel, v in sorted(reg.items()):
+        klic = "material:" + v["otisk"][:16]
+        cast = rel.split("/")
+        predmet = "" if cast[0] == INBOX else cast[0]
+        if v["stav"] == "duplicita" or klic in ignorovane or (VLASTNI_PREFIX and cast[-1].startswith(VLASTNI_PREFIX)):
+            continue
+        if "Úkoly" in cast[1:-1] or "Organizace" in cast[1:-1]:  # už přiřazené k úkolu, nebo podmínky předmětu
+            continue
+        c = CACHE / f"{v['otisk'][:16]}.md"
+        if not c.exists():
+            continue
+        radky = c.read_text(errors="ignore").split("\n")[1:]
+        for i, radek in enumerate(radky):
+            m = ZADANI.search(radek)
+            if not m:
+                continue
+            nazev = re.sub(r"\s*\(.*$|^[\s:–-]+|[\s.:;,]+$", "", radek[m.end():]).strip()
+            if m.group(0).casefold().startswith("zadání portfolia"):
+                nazev = "Portfolio"
+            if not 4 <= len(nazev) <= 80:
+                nazev = re.sub(r"[_]+", " ", Path(cast[-1]).stem).strip()
+            nazev = ciste_jmeno_souboru(nazev)
+            termin = ""
+            for r in radky[i:i + 3]:  # hned u zadání, nebo kdekoli na řádku o odevzdání
+                termin = najdi_datum(r) if "doporučuje studovat" not in r and (ODEVZDANI.search(r) or r is radky[i]) else ""
+                if termin:
+                    break
+            if not termin:
+                termin = next((d for r in radky if ODEVZDANI.search(r) and "doporučuje studovat" not in r and (d := najdi_datum(r))), "")
+            znama = ukoly_predmetu.get(predmet, [])
+            sl = slova_nazvu(nazev)
+            if any(cast[-1] in z or (sl and len(sl & u) / min(len(sl), len(u) or 1) >= 0.6) for u, z in znama):
+                break  # takový úkol už existuje
+            nove.append({"klic": klic, "soubor": rel, "predmet": predmet, "nazev": nazev, "termin": termin})
+            break
+    return nove
+
+
+def pocet_slov_docx(p):
+    try:
+        with zipfile.ZipFile(p) as z:
+            if z.getinfo("word/document.xml").file_size > MAX_CAST:
+                return 0
+            return len(re.sub(r"<[^>]+>", " ", z.read("word/document.xml").decode("utf8", "ignore")).split())
+    except (OSError, KeyError, zipfile.BadZipFile):
+        return 0
+
+
+def najdi_hotove(ignorovane):
+    """Otevřený úkol, ve složce kterého už leží hotová práce → nabídka „hotovo“. Rozhoduje vždy uživatel."""
+    hotove = []
+    for p, rel in poznamky():
+        fm = frontmatter(p)
+        klic = "hotovo:" + rel
+        if fm.get("typ") != "ukol" or fm.get("stav") == "hotovo" or p.parent.parent.name != "Úkoly" or klic in ignorovane:
+            continue
+        for f in sorted(p.parent.rglob("*")):
+            if not f.is_file() or f.is_symlink() or f.suffix == ".md" or f.name.startswith("."):
+                continue
+            jmeno = nfc(f.name).casefold()
+            vlastni = VLASTNI_PREFIX and f.name.startswith(VLASTNI_PREFIX) and f.suffix == ".docx" and pocet_slov_docx(f) >= PRACE_SLOV
+            if vlastni or f.suffix.lower() in (".mp4", ".mov", ".wav", ".mp3") or re.search(r"hotovo|vypracov|odevzdan", jmeno):
+                hotove.append({"klic": klic, "ukol": rel, "soubor": nfc(str(f.relative_to(TREZOR)))})
+                break
+    return hotove
+
+
+def pridej_ukol(soubor, predmet, nazev, termin=""):
+    """Úkol z nalezeného zadání: vlastní složka v <Předmět>/Úkoly a poznámka s odkazem na materiál."""
+    T = texty()
+    zdroj = (TREZOR / soubor).resolve()
+    cilova = (TREZOR / predmet).resolve()
+    prehled = cilova / f"{cilova.name}.md"
+    if cilova.parent != TREZOR.resolve() or not prehled.is_file():
+        sys.exit(f"Neznámý předmět: {predmet}")
+    if not zdroj.is_relative_to(TREZOR.resolve()) or not zdroj.is_file():
+        sys.exit(f"Soubor v trezoru neexistuje: {soubor!r}")
+    if termin:
+        try:
+            termin = date.fromisoformat(termin).isoformat()
+        except ValueError:
+            sys.exit(T["chyba_termin"])
+    cisty = ciste_jmeno_souboru(nazev)[:150].strip()
+    if not cisty:
+        sys.exit(T["chyba_nazev"])
+    ukoly = cilova / "Úkoly"
+    cisla = [int(m.group(1)) for d in (ukoly.iterdir() if ukoly.is_dir() else []) if d.is_dir() and (m := re.match(r"(\d+) ", d.name))]
+    cil = ukoly / f"{max(cisla, default=0) + 1} {cisty}" / f"{T['ukol_prefix']}{cisty}.md"
+    cil.parent.mkdir(parents=True)
+    rel_zdroj = nfc(str(zdroj.relative_to(TREZOR.resolve())))
+    kod = frontmatter(prehled).get("kod", "")
+    odkaz = json.dumps(f"[[{rel_zdroj}|{zdroj.name}]]", ensure_ascii=False)
+    cil.write_text(f"---\ntyp: ukol\npredmet: \"[[{cilova.name}]]\"\nkod: {kod}\ntermin: {termin}\nstav: otevreno\nzdroj: {odkaz}\n"
+                   f"tags:\n  - ukol\n---\n# {T['ukol_prefix']}{cisty}\n\n{T['zadani']}\n\n{T['postup']}\n- [ ] \n"
+                   + (f"- [ ] {T['odevzdat']} [due:: {termin}]\n" if termin else f"- [ ] {T['odevzdat']}\n")
+                   + f"\n{T['poznamky']}\n", encoding="utf8")
+    print(nfc(str(cil.relative_to(TREZOR.resolve()))))
 
 
 def frontmatter(p):
@@ -685,10 +1028,19 @@ if __name__ == "__main__":
     # jen jeden běh najednou (Obsidian i AI ho spouštějí souběžně) – jinak by se přepisoval registr
     zamek = open(ZAMEK, "w")
     fcntl.flock(zamek, fcntl.LOCK_EX)
+    migruj_inbox()
     if len(sys.argv) == 3 and sys.argv[1] in ("--hotovo", "--preskoc"):
         oznac(sys.argv[2], "hotovo" if sys.argv[1] == "--hotovo" else "preskoceno")
-    elif len(sys.argv) == 4 and sys.argv[1] == "--presun":
-        presun(sys.argv[2], sys.argv[3])
+    elif len(sys.argv) in (4, 5) and sys.argv[1] == "--presun":
+        presun(*sys.argv[2:])
+    elif len(sys.argv) in (5, 6) and sys.argv[1] == "--pridej-ukol":
+        pridej_ukol(*sys.argv[2:])
+    elif len(sys.argv) == 3 and sys.argv[1] == "--ignoruj":
+        ignoruj(sys.argv[2])
+    elif len(sys.argv) == 3 and sys.argv[1] == "--navrh":
+        navrh(sys.argv[2])
+    elif len(sys.argv) == 4 and sys.argv[1] == "--nechat":
+        nechat_obe(sys.argv[2], sys.argv[3])
     elif len(sys.argv) == 3 and sys.argv[1] == "--zmenene":
         if not (sys.argv[2].isascii() and sys.argv[2].isdigit()):
             sys.exit(f"Počet dní musí být celé číslo: {sys.argv[2]!r}")

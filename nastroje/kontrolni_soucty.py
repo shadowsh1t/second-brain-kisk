@@ -13,7 +13,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SOUCTY = REPO / "SHA256SUMS.txt"
-VYNECHAT = {".git", "__pycache__", ".DS_Store", "SHA256SUMS.txt", ".instalace-postup", "dist"}
+VYNECHAT = {".git", "__pycache__", ".DS_Store", "SHA256SUMS.txt", ".instalace-postup", "dist", "settings.local.json"}
 
 
 def soubory():

@@ -33,7 +33,7 @@ const DISTRIBUCE = "github";
 const BALIK = null;
 // stejné jako VZDY_NAHRADIT v nastroje/aktualizace.py (Obsidian tabulky sám přeformátuje, takže by vypadaly jako upravené)
 const VZDY_NAHRADIT = ["_Systém/Studium.base"];
-const JEN_VYTVORIT = ["_Inbox/Inbox.md", "_Pojmy/Pojmy.md", "_Přehledy/Přehledy.md"];  // rozcestníky patří uživateli
+const JEN_VYTVORIT = ["_Vkládání učiva/Vkládání učiva.md", "_Pojmy/Pojmy.md", "_Přehledy/Přehledy.md"];  // rozcestníky patří uživateli
 const PRIPONA_NOVA_VERZE = { cs: " (nová verze)", sk: " (nová verzia)", en: " (new version)", uk: " (нова версія)" };
 const AKTUALIZACE_KAZDYCH_MS = 24 * 60 * 60 * 1000;
 const VERZE = /^v?(\d+)\.(\d+)\.(\d+)$/;
@@ -85,7 +85,7 @@ const ZALOHA_PO_ZMENE_MS = 10 * 60 * 1000;
 const ZALOHA_DENNE_MS = 24 * 60 * 60 * 1000;
 const ZALOHA_VERZE = /^\d{4}-\d{2}-\d{2} \d{2}\.\d{2}(\.\d{2})?$/;
 const ZALOHA_VYNECHAT = ["_Systém/cache", "_Systém/Inspirace", ".druhy-mozek-zaloha", ".obsidian/plugins/copilot", ".obsidian/plugins/neuro-roadmap", ".trash", ".git"];
-const ZALOHA_BEZ_ZMENY = ["_Systém/Fronta.md", "_Systém/fronta.json", "_Systém/registr.json", "_Systém/Kontrola druhého mozku.md"];
+const ZALOHA_BEZ_ZMENY = ["_Systém/Fronta.md", "_Systém/fronta.json", "_Systém/duplicity.json", "_Systém/ukoly_navrhy.json", "_Systém/registr.json", "_Systém/Kontrola druhého mozku.md"];
 const ZALOHA_VZDY = ["_Systém/Word/logo-muni-arts.png"];
 const MATERIAL = /\.(pdf|pptx?|docx?|rtf|webloc|png|jpe?g|heic|webp|gif|zip|mp4|mov|mp3|m4a)$/i;
 
@@ -144,12 +144,22 @@ module.exports = class DruhyMozek extends Plugin {
 
     this.addRibbonIcon("brain", this.manifest.name, (evt) => this.ukazMenu(evt));
     this.addSettingTab(new NastaveniTab(this.app, this));
+    // do 1.0.6 se vkládací složka jmenovala _Inbox; běžící Obsidian by si starou hodnotu zapsal zpět
+    if (this.app.vault.getConfig?.("newFileFolderPath") === "_Inbox") this.app.vault.setConfig?.("newFileFolderPath", "_Vkládání učiva");
     this.registrujPrikazy();
 
     // ```druhy-mozek``` v poznámce vykreslí tlačítka akcí, ```druhy-mozek-stav``` stav kontroly (obojí na Domově)
     this.registerMarkdownCodeBlockProcessor("druhy-mozek", (zdroj, el) => this.vykresliTlacitka(zdroj, el));
     this.bannery = new Set();
     this.registerMarkdownCodeBlockProcessor("druhy-mozek-stav", (zdroj, el) => { this.bannery.add(el); this.vykresliStav(el); });
+    // ```druhy-mozek-ukoly``` = interaktivní tabulka úkolů; s řádkem „predmet“ jen úkoly předmětu, ve kterém poznámka leží
+    this.tabulkyUkolu = new Set();
+    this.registerMarkdownCodeBlockProcessor("druhy-mozek-ukoly", (zdroj, el, ctx) => {
+      const tabulka = { el, predmet: zdroj.trim() === "predmet" ? ctx.sourcePath.split("/")[0] : null, filtr: "", hotove: false };
+      this.tabulkyUkolu.add(tabulka);
+      this.vykresliUkoly(tabulka);
+    });
+    this.registerEvent(this.app.metadataCache.on("changed", () => this.naplanujPrekresleniUkolu()));
 
     this.stavovyRadek = this.addStatusBarItem();
     this.stavovyRadek.addClass("mod-clickable", "druhy-mozek-stav-radek");
@@ -324,6 +334,7 @@ module.exports = class DruhyMozek extends Plugin {
     const bezAI = this.rezimAI() === "zadna";
     return [
       { id: "zpracuj", ai: true, ikona: "inbox", nazev: T("📥 Zpracovat nové materiály (AI)"), spust: () => this.claude("/zpracuj") },
+      { id: "zaradit", ikona: "folder-input", nazev: T("📂 Zařadit soubor do předmětu"), spust: () => new ZaraditVyber(this).open() },
       { id: "fronta", ikona: "search", nazev: T("🔎 Co čeká na zpracování (bez AI)"), spust: () => this.ukazFrontu() },
       { id: "poznamka", ikona: "file-pen", nazev: T("📝 Nová poznámka k materiálu"),
         spust: () => new MaterialVyber(this, (m) => this.novaPoznamka(m), T("Ke kterému materiálu chceš psát poznámku?")).open() },
@@ -418,7 +429,7 @@ module.exports = class DruhyMozek extends Plugin {
       fs.mkdirSync(path.dirname(cil), { recursive: true });
       fs.writeFileSync(cil, f.text);
     }
-    if (!predmety.length) for (const d of ["Příklad předmětu/Poznámky", "Příklad předmětu/Úkoly"]) fs.mkdirSync(path.join(this.zaklad, d), { recursive: true });
+    if (!predmety.length) for (const d of ["Příklad předmětu/Učivo", "Příklad předmětu/Poznámky", "Příklad předmětu/Úkoly", "Příklad předmětu/Organizace"]) fs.mkdirSync(path.join(this.zaklad, d), { recursive: true });
     const nastaveni = { jmeno: v.jmeno, jmeno_soubor: v.jmenoSoubor, uco: v.uco, ai: v.ai, ai_prikaz: v.ai === "jina" ? v.aiPrikaz : "",
       jazyk: v.jazyk, jazyk_word: v.jazykWord || v.jazyk };
     fs.writeFileSync(path.join(this.zaklad, "_Systém", "nastaveni.json"), JSON.stringify(nastaveni, null, 2) + "\n");
@@ -1382,7 +1393,7 @@ module.exports = class DruhyMozek extends Plugin {
 
   naplanujFrontu() {
     clearTimeout(this.casovacFronty);
-    this.casovacFronty = setTimeout(() => this.spustPython("priprav.py", []).catch(() => {}), 4000);
+    this.casovacFronty = setTimeout(() => this.spustPython("priprav.py", []).then(() => this.prekresliUkoly()).catch(() => {}), 4000);
   }
 
   async ukazFrontu() {
@@ -1443,14 +1454,168 @@ module.exports = class DruhyMozek extends Plugin {
     }
   }
 
+  // ---------- Interaktivní úkoly ----------
+
+  vsechnyUkoly() {
+    return this.app.vault.getMarkdownFiles()
+      .filter((f) => !f.path.startsWith("_Systém/") && !f.path.startsWith("_Archiv/"))
+      .map((f) => ({ f, fm: this.app.metadataCache.getFileCache(f)?.frontmatter }))
+      .filter((x) => ["ukol", "zkouska"].includes(x.fm?.typ))
+      .map((x) => ({ soubor: x.f, predmet: x.f.path.split("/")[0], kod: x.fm.kod || "", stav: x.fm.stav || "otevreno", dokonceno: String(x.fm.dokonceno || "").slice(0, 10),
+        termin: /^\d{4}-\d{2}-\d{2}/.test(String(x.fm.termin || "")) ? String(x.fm.termin).slice(0, 10) : "" }))
+      .sort((a, b) => (a.termin || "9999").localeCompare(b.termin || "9999") || a.soubor.basename.localeCompare(b.soubor.basename));
+  }
+
+  navrhyUkolu() {
+    try {
+      const n = JSON.parse(fs.readFileSync(path.join(this.zaklad, "_Systém", "ukoly_navrhy.json"), "utf8"));
+      return { nove: Array.isArray(n.nove) ? n.nove : [], hotove: Array.isArray(n.hotove) ? n.hotove : [] };
+    } catch (e) {
+      return { nove: [], hotove: [] };
+    }
+  }
+
+  async nastavStavUkolu(f, stav) {
+    await this.app.fileManager.processFrontMatter(f, (fm) => {
+      fm.stav = stav;
+      if (stav === "hotovo") fm.dokonceno = dnesniDatum(); else delete fm.dokonceno;
+    });
+    if (stav === "hotovo") await this.app.vault.process(f, (t) => t.replace(KROK_ODEVZDAT, "- [x] $1"));
+  }
+
+  naplanujPrekresleniUkolu() {
+    clearTimeout(this.casovacUkolu);
+    this.casovacUkolu = setTimeout(() => this.prekresliUkoly(), 500);
+  }
+
+  prekresliUkoly() {
+    for (const t of this.tabulkyUkolu) {
+      if (t.el.isConnected === false) { this.tabulkyUkolu.delete(t); continue; }
+      const aktivni = globalThis.document?.activeElement;
+      if (t.el.contains?.(aktivni) && aktivni?.tagName === "INPUT" && aktivni?.type === "text") continue;  // nepřerušovat psaní
+      this.vykresliUkoly(t);
+    }
+  }
+
+  vykresliUkoly(t) {
+    t.el.empty();
+    const box = t.el.createDiv({ cls: "druhy-mozek-ukoly" });
+    const vPredmetu = (p) => !t.predmet || p === t.predmet;
+    const navrhy = this.navrhyUkolu();
+    const predmety = this.predmety();
+
+    for (const n of navrhy.hotove.filter((x) => vPredmetu(x.ukol.split("/")[0]))) {
+      const r = box.createDiv({ cls: "druhy-mozek-navrh" });
+      r.createSpan({ text: T("✅ Hotovo? {0} – ve složce je {1}", n.ukol.split("/").pop().replace(/\.md$/, ""), n.soubor.split("/").pop()) });
+      const f = this.app.vault.getAbstractFileByPath(n.ukol);
+      r.createEl("button", { text: T("Hotovo"), cls: "mod-cta" }).addEventListener("click", async () => {
+        if (f) await this.nastavStavUkolu(f, "hotovo");
+        await this.odmitniNavrh(n.klic);
+      });
+      r.createEl("button", { text: T("Ještě ne") }).addEventListener("click", () => this.odmitniNavrh(n.klic));
+    }
+    for (const n of navrhy.nove.filter((x) => vPredmetu(x.predmet))) {
+      const r = box.createDiv({ cls: "druhy-mozek-navrh" });
+      r.createSpan({ text: T("🆕 Nalezený úkol:") });
+      const nazev = r.createEl("input", { type: "text", value: n.nazev });
+      let vyber = null;
+      if (!n.predmet) {
+        vyber = r.createEl("select");
+        for (const p of predmety) vyber.createEl("option", { text: p.nazev, value: p.nazev });
+      }
+      const termin = r.createEl("input", { type: "date", value: n.termin });
+      r.createEl("button", { text: T("Přidat"), cls: "mod-cta" }).addEventListener("click", async () => {
+        const predmet = n.predmet || vyber?.value;
+        try {
+          const args = ["--pridej-ukol", n.soubor, predmet, nazev.value, ...(termin.value ? [termin.value] : [])];
+          await this.spustPython("priprav.py", args);
+          await this.spustPython("priprav.py", []);
+          this.prekresliUkoly();
+        } catch (e) {
+          this.chyba(T("Úkol se nepodařilo přidat: {0}", e.message), "ukol");
+        }
+      });
+      r.createEl("button", { text: T("Ignorovat") }).addEventListener("click", () => this.odmitniNavrh(n.klic));
+      r.createEl("a", { text: n.soubor.split("/").pop(), cls: "druhy-mozek-navrh-zdroj" })
+        .addEventListener("click", () => this.app.workspace.openLinkText(n.soubor, "", true));
+    }
+
+    const ovladani = box.createDiv({ cls: "druhy-mozek-ukoly-ovladani" });
+    if (!t.predmet) {
+      const filtr = ovladani.createEl("select");
+      filtr.createEl("option", { text: T("Všechny předměty"), value: "" });
+      for (const p of predmety) filtr.createEl("option", { text: p.nazev, value: p.nazev });
+      filtr.value = t.filtr;
+      filtr.addEventListener("change", () => { t.filtr = filtr.value; this.vykresliUkoly(t); });
+    }
+    const stitek = ovladani.createEl("label");
+    const zaskrt = stitek.createEl("input", { type: "checkbox" });
+    zaskrt.checked = t.hotove;
+    zaskrt.addEventListener("change", () => { t.hotove = zaskrt.checked; this.vykresliUkoly(t); });
+    stitek.appendText?.(" " + T("Ukázat hotové"));
+    const hledat = ovladani.createEl("input", { type: "text", placeholder: T("Hledat úkol…"), value: t.hledat || "" });
+    hledat.addEventListener("input", () => { t.hledat = hledat.value; kresli(); });
+    if (t.hotove) {  // hotové úkoly podle data dokončení (u starších podle termínu)
+      for (const [klic, popis] of [["od", T("Hotovo od")], ["do", T("Hotovo do")]]) {
+        const s = ovladani.createEl("label", { text: popis + " " });
+        const d = s.createEl("input", { type: "date", value: t[klic] || "" });
+        d.addEventListener("change", () => { t[klic] = d.value; kresli(); });
+      }
+    }
+    const obsah = box.createDiv();
+    const kresli = () => { obsah.empty(); this.vykresliTabulkuUkolu(t, obsah, vPredmetu); };
+    kresli();
+  }
+
+  vykresliTabulkuUkolu(t, box, vPredmetu) {
+    const hledane = (t.hledat || "").trim().toLocaleLowerCase();
+    const ukoly = this.vsechnyUkoly().filter((u) => {
+      if (!vPredmetu(u.predmet) || (t.filtr && u.predmet !== t.filtr) || (!t.hotove && u.stav === "hotovo")) return false;
+      if (hledane && !u.soubor.basename.toLocaleLowerCase().includes(hledane)) return false;
+      if (u.stav === "hotovo" && (t.od || t.do)) {
+        const datum = u.dokonceno || u.termin;
+        if (!datum || (t.od && datum < t.od) || (t.do && datum > t.do)) return false;
+      }
+      return true;
+    });
+    if (!ukoly.length) { box.createEl("p", { text: hledane || t.od || t.do ? T("Nic nenalezeno.") : T("Žádné otevřené úkoly 🎉") }); return; }
+    const tabulka = box.createEl("table");
+    const hlava = tabulka.createEl("tr");
+    for (const n of [T("Úkol"), ...(t.predmet ? [] : [T("Předmět")]), T("Termín"), T("Zbývá"), T("Stav")]) hlava.createEl("th", { text: n });
+    for (const u of ukoly) {
+      const r = tabulka.createEl("tr", { cls: u.stav === "hotovo" ? "je-hotovo" : "" });
+      r.createEl("td").createEl("a", { text: u.soubor.basename }).addEventListener("click", () => this.app.workspace.openLinkText(u.soubor.path, "", true));
+      if (!t.predmet) r.createEl("td", { text: u.kod || u.predmet });
+      const termin = r.createEl("td").createEl("input", { type: "date", value: u.termin });
+      termin.addEventListener("change", () => this.app.fileManager.processFrontMatter(u.soubor, (fm) => { fm.termin = termin.value; }));
+      const dny = u.termin ? dnyDo(u.termin) : null;
+      r.createEl("td", { text: u.stav === "hotovo" ? `✅ ${u.dokonceno}`.trim() : dny === null ? "—" : dny < 0 ? T("⚠️ po termínu") : dny === 0 ? T("🔥 dnes") : T("za {0} dní", dny) });
+      const stav = r.createEl("td").createEl("select");
+      for (const [hodnota, text] of [["otevreno", T("Otevřeno")], ["rozpracovano", T("Rozpracováno")], ["hotovo", T("Hotovo")]]) {
+        stav.createEl("option", { text, value: hodnota });
+      }
+      stav.value = u.stav;
+      stav.addEventListener("change", () => this.nastavStavUkolu(u.soubor, stav.value));
+    }
+  }
+
+  async odmitniNavrh(klic) {
+    try {
+      await this.spustPython("priprav.py", ["--ignoruj", klic]);
+      await this.spustPython("priprav.py", []);
+    } catch (e) {
+      this.chyba(T("Návrh se nepodařilo skrýt: {0}", e.message), "ukol");
+    }
+    this.prekresliUkoly();
+  }
+
   async oznacHotovo() {
     const f = this.app.workspace.getActiveFile();
     if (!f || this.app.metadataCache.getFileCache(f)?.frontmatter?.typ !== "ukol") {
       new Notice(T("Otevři nejdřív poznámku úkolu."));
       return;
     }
-    await this.app.fileManager.processFrontMatter(f, (fm) => { fm.stav = "hotovo"; });
-    await this.app.vault.process(f, (t) => t.replace(KROK_ODEVZDAT, "- [x] $1"));
+    await this.nastavStavUkolu(f, "hotovo");
     new Notice(T("✅ Úkol je odevzdaný – zmizí z termínů na Domově i v plánu."));
   }
 
@@ -2353,5 +2518,77 @@ class PredmetVyber extends FuzzySuggestModal {
   }
   onChooseItem(p) {
     this.poVyberu(p);
+  }
+}
+
+// Soubory, které ještě nejsou zařazené: vkládací složka a kořen předmětu
+class ZaraditVyber extends FuzzySuggestModal {
+  constructor(plugin) {
+    super(plugin.app);
+    this.plugin = plugin;
+    this.setPlaceholder(T("Vyber soubor k zařazení…"));
+  }
+  getItems() {
+    const predmety = new Set(this.plugin.predmety().map((p) => p.nazev));
+    return this.app.vault.getFiles().filter((f) => {
+      const c = f.path.split("/");
+      if (c.length !== 2 || f.path === "_Vkládání učiva/Vkládání učiva.md") return false;
+      return c[0] === "_Vkládání učiva" || (predmety.has(c[0]) && c[1] !== `${c[0]}.md` && f.extension !== "md");
+    });
+  }
+  getItemText(f) {
+    return f.path;
+  }
+  async onChooseItem(f) {
+    let navrh = { predmet: "", nazev: f.basename };
+    try {
+      await this.plugin.spustPython("priprav.py", []);
+      navrh = JSON.parse(await this.plugin.spustPython("priprav.py", ["--navrh", f.path]));
+    } catch (e) { /* návrh je jen pomůcka – název i předmět vyplní uživatel */ }
+    new ZaraditModal(this.plugin, f, navrh).open();
+  }
+}
+
+class ZaraditModal extends Modal {
+  constructor(plugin, soubor, navrh) {
+    super(plugin.app);
+    this.plugin = plugin;
+    this.soubor = soubor;
+    this.predmet = navrh.predmet || soubor.path.split("/")[0];
+    this.nazev = navrh.nazev;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    this.titleEl.setText(T("📂 Zařadit soubor do předmětu"));
+    new Setting(contentEl).setName(this.soubor.name).addButton((b) => b.setButtonText(T("Otevřít soubor")).onClick(() => {
+      if (this.app.openWithDefaultApp) this.app.openWithDefaultApp(this.soubor.path);  // okno zůstane otevřené, soubor se ukáže vedle
+      else this.app.workspace.openLinkText(this.soubor.path, "", true);
+    }));
+    new Setting(contentEl).setName(T("Předmět")).addDropdown((d) => {
+      for (const p of this.plugin.predmety()) d.addOption(p.nazev, `${p.kod} ${p.nazev}`.trim());
+      if (this.plugin.predmety().some((p) => p.nazev === this.predmet)) d.setValue(this.predmet);
+      else this.predmet = d.getValue?.() || "";
+      d.onChange((v) => (this.predmet = v));
+    }).addButton((b) => b.setButtonText(T("Nový předmět")).onClick(() => {
+      this.close();
+      new PredmetNovyModal(this.plugin, () => new ZaraditModal(this.plugin, this.soubor, { predmet: this.predmet, nazev: this.nazev }).open()).open();
+    }));
+    new Setting(contentEl).setName(T("Název")).setDesc(T("Tvar: Téma – KÓD, u interaktivní osnovy IO – Téma – KÓD. Přípona se doplní sama."))
+      .addText((t) => t.setValue(this.nazev).onChange((v) => (this.nazev = v)));
+    new Setting(contentEl)
+      .addButton((b) => b.setButtonText(T("Zrušit")).onClick(() => this.close()))
+      .addButton((b) => b.setButtonText(T("Zařadit")).setCta().onClick(async () => {
+        try {
+          await this.plugin.spustPython("priprav.py", ["--presun", this.soubor.path, this.predmet, this.nazev]);
+          await this.plugin.spustPython("priprav.py", []);
+          this.plugin.prekresliUkoly();
+          this.close();
+        } catch (e) {
+          this.plugin.chyba(T("Soubor se nepodařilo zařadit: {0}", e.message), "zaradit");
+        }
+      }));
+  }
+  onClose() {
+    this.contentEl.empty();
   }
 }
