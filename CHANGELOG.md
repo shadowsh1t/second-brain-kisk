@@ -3,6 +3,10 @@
 All notable changes to Second Brain for KISK. The newest version is at the top.
 When a new version is released, Obsidian offers it under **🆕 A new version of Second Brain is available** with a link to this list.
 
+## 1.1.1 – 2026-11-08
+
+- Fixed: Claude Code 2.1.309 and newer no longer shows six warnings about `Write(...)` permission rules when it starts in your vault. Newer Claude Code checks file writes only with `Edit(...)` rules, which the vault already had, so the protection of the plugin, scripts, AI rules and backup stays the same.
+
 ## 1.1.0 – 2026-10-30
 
 - **Interactive assignment table** – Home and each course overview show assignments in a table where you can filter them, search, change the deadline and status, and show finished ones. New assignments found in your materials are offered with **Add** and **Ignore**, and an assignment that looks finished is offered as done.

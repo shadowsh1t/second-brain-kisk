@@ -942,10 +942,12 @@ class Repozitar(unittest.TestCase):
     def test_opravneni_ai(self):
         """AI nesmí do zálohy z aktualizace a systémová data mění jen s potvrzením."""
         o = json.loads((ZDROJ / ".claude/settings.json").read_text())["permissions"]
-        for r in ("Edit(.druhy-mozek-zaloha/**)", "Write(.druhy-mozek-zaloha/**)", "Bash(rm:*)", "Bash(curl:*)", "Bash(python3 -c:*)"):
+        for r in ("Edit(.druhy-mozek-zaloha/**)", "Bash(rm:*)", "Bash(curl:*)", "Bash(python3 -c:*)"):
             self.assertIn(r, o["deny"])
-        for r in ("Write(_Systém/**/*.json)", "Write(_Systém/**/*.base)", "Write(_Systém/**/*.py)", "Write(.obsidian/**)", "Write(.claude/**)"):
+        for r in ("Edit(_Systém/**/*.json)", "Edit(_Systém/**/*.base)", "Edit(_Systém/**/*.py)", "Edit(.obsidian/**)", "Edit(.claude/**)"):
             self.assertIn(r, o["ask"])
+        # Claude Code pravidla Write(cesta) nepoužívá (zápis hlídá Edit) a hlásí na ně varování
+        self.assertEqual([r for k in ("allow", "ask", "deny") for r in o.get(k, []) if r.startswith("Write(")], [])
         self.assertEqual(o.get("disableBypassPermissionsMode"), "disable")
         for skript in ("priprav", "novy_ukol", "prehledy", "predmety"):  # AI je volá relativní cestou bez potvrzování
             self.assertIn(f"Bash(python3 _Systém/{skript}.py:*)", o["allow"])
