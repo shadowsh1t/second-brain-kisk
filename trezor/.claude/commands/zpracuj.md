@@ -16,9 +16,13 @@ Zpracuj nové studijní materiály podle `.claude/CLAUDE.md`.
      dopiš ji do poznámky a zkontroluj `python3 _Systém/priprav.py --kontrola "<cesta>" --kapitola N`; `--hotovo` až po poslední,
    - rozhodni typ: přednáška/učivo → poznámka `prednaska`; zadání → `ukol`; osnova → doplň přehled předmětu;
      vlastní práce nebo odkaz `.webloc` → zapiš do přehledu předmětu (sekce Odevzdáno / Odkazy);
-   - vytvoř nebo doplň poznámky a pojmy (poznámka má `zdroj: "[[<název souboru>]]"`),
+   - položka s polem `ukol` (soubor ve složce úkolu): zadání zapiš úplně do poznámky úkolu (`ukol`); podklad k úkolu
+     (text, prezentace, článek) je učivo – vlastní poznámka `prednaska` a odkaz na ni v poznámce úkolu pod „Podklady“;
+     vlastní práce jen do přehledu předmětu (Odevzdáno) a do poznámky úkolu, pak `--preskoc`,
+   - vytvoř nebo doplň poznámky a pojmy (poznámka má `zdroj: "[[<název souboru>]]"`). Každý materiál má vlastní poznámku;
+     do jedné poznámky patří jen verze téhož textu, všechny ve `zdroje:` jako seznam (různé materiály skript odmítne),
    - **kontrola úplnosti:** `python3 _Systém/priprav.py --kontrola "<cesta>"`. Když poznámka nemá `zdroj` s tímhle souborem
-     (osnova → přehled předmětu, sloučené verze), přidej cestu poznámky jako druhý argument. Každou položku `✗` doplň
+     (osnova → přehled předmětu, zadání → poznámka úkolu), přidej cestu poznámky jako druhý argument. Každou položku `✗` doplň
      do poznámky (Edit), nebo když do výpisků opravdu nepatří (logo, hlavička, číslo bez významu), zdůvodni ji:
      `python3 _Systém/priprav.py --vynech "<cesta>" ID[,ID] "důvod"`. Kontrolu opakuj, dokud nic nechybí.
    - **druhé čtení:** projdi cache po oddílech proti poznámce – chybí definice, vztah, příklad, krok nebo požadavek, který by

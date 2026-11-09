@@ -9,7 +9,7 @@ cssclasses:
 
 > [!akce] ⚡ Akce
 > ```druhy-mozek
-> novy-ukol zaradit prevod zpracuj poznamka fronta rucne-hotovo karticky roadmap hotovo tyden zkouska kalendar citace
+> novy-ukol zaradit prevod zpracuj poznamka fronta rucne-hotovo znovu karticky roadmap hotovo tyden zkouska kalendar citace
 > ```
 > [[01 Návod|📖 Návod]] · [[Vkládání učiva|📥 Vkládání učiva]] · [[Pojmy|🧠 Všechny pojmy]] · [[Přehledy|🗓 Týdenní přehledy]] · všechny akce najdeš i pod ikonou 🧠 v levém panelu
 

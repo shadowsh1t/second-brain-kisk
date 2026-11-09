@@ -12,6 +12,7 @@ Použití:
   python3 _Systém/priprav.py --vynech CESTA ID[,ID] DŮVOD  # položka kontroly záměrně v poznámce není
   python3 _Systém/priprav.py --k-overeni CESTA TEXT  # nejisté místo z druhého čtení (ukáže se ve Frontě)
   python3 _Systém/priprav.py --preskoc CESTA # označí soubor jako přeskočený (vlastní práce, osnova…)
+  python3 _Systém/priprav.py --znovu CESTA   # vrátí zpracovaný materiál do fronty (přečte se znovu)
   python3 _Systém/priprav.py --presun SOUBOR PŘEDMĚT [NÁZEV]  # zařadí soubor do <Předmět>/Učivo
   python3 _Systém/priprav.py --pridej-ukol SOUBOR PŘEDMĚT NÁZEV [TERMÍN]  # úkol z nalezeného zadání
   python3 _Systém/priprav.py --ignoruj KLÍČ  # návrh úkolu nebo „hotovo“ už nenabízet
@@ -27,6 +28,7 @@ import hashlib
 import html
 import itertools
 import json
+import os
 import plistlib
 import posixpath
 import shutil
@@ -549,7 +551,7 @@ def uloz_registr(reg):
 def materialy():
     for p in sorted(TREZOR.rglob("*")):
         rel = p.relative_to(TREZOR)
-        if not p.is_file() or set(rel.parts[:-1]) & VYNECHAT or p.name.startswith("."):
+        if not p.is_file() or {nfc(x) for x in rel.parts[:-1]} & VYNECHAT or p.name.startswith("."):
             continue
         if len(rel.parts) == 1:  # soubory v kořeni trezoru (Domov apod.)
             continue
@@ -579,12 +581,15 @@ def oznac(cesta, stav, poznamka=None):
     p, rel = soubor_v_trezoru(cesta)
     if stav == "hotovo":
         T = texty()
-        data, pozn = kontroluj(p, rel, poznamka)
         bez_ai = je_bez_ai()
+        if not bez_ai:
+            over_slouceni(rel, poznamka, T)
+        data, pozn = kontroluj(p, rel, poznamka)
         if data["chybi"] and not bez_ai:
             sys.exit(T["kontrola_neoznaceno"].format(c=len(data["chybi"])))
         if pozn and frontmatter(pozn).get("typ") != "predmet":  # přehled předmětu (osnova) vlastnost nedostane
-            nastav_vlastnost(pozn, "uplnost", "k-overeni" if data["chybi"] or data["k_overeni"] or zbyva_neprecteno(data) else "uplna")
+            # sloučená poznámka (verze téhož textu) je úplná, jen když jsou úplné všechny její zdroje
+            nastav_vlastnost(pozn, "uplnost", "k-overeni" if mezera(data) or mezera_dalsich_zdroju(pozn, rel) else "uplna")
     reg = nacti_registr()
     reg[rel] = {"otisk": otisk(p), "stav": stav, "datum": date.today().isoformat(), **podpis(p)}
     uloz_registr(reg)
@@ -796,7 +801,7 @@ def najdi_poznamku(rel, zadana):
     if zadana is not None:
         koren, p = TREZOR.resolve(), (TREZOR / zadana).resolve()
         if (not zadana.strip() or not p.is_relative_to(koren) or p.suffix.lower() != ".md" or not p.is_file()
-                or p.relative_to(koren).parts[0] in VYNECHAT - {"_Pojmy", "_Přehledy", "_Zdroje", "Poznámky"} | {".druhy-mozek-zaloha"}):
+                or nfc(p.relative_to(koren).parts[0]) in VYNECHAT - {"_Pojmy", "_Přehledy", "_Zdroje", "Poznámky"} | {".druhy-mozek-zaloha"}):
             sys.exit(T["kontrola_spatna_poznamka"].format(p=zadana))
         return p
     jmeno = nfc(Path(rel).name)
@@ -1039,6 +1044,97 @@ def pridej_k_overeni(cesta, text):
     print(T["kontrola_k_overeni"].format(n=len(data["k_overeni"]), s=text))
 
 
+def mezera(data):
+    return bool(data.get("chybi") or data.get("k_overeni") or zbyva_neprecteno(data))
+
+
+def zdroje_poznamky(pozn, reg):
+    """Materiály z registru, na které poznámka odkazuje ve `zdroj`/`zdroje` (stejný název jinde → přednost má předmět poznámky)."""
+    nazvy = odkazy_zdroju(pozn)
+    try:
+        predmet = nfc(str(pozn.resolve().relative_to(TREZOR.resolve()))).split("/")[0]
+    except ValueError:  # odkaz ven z trezoru – předmět neznáme
+        predmet = ""
+    podle_nazvu = {}
+    for k in reg:
+        for n in {nfc(Path(k).name), nfc(Path(k).stem)} & nazvy:
+            podle_nazvu.setdefault(n, []).append(k)
+    vysledek = set()
+    for kandidati in podle_nazvu.values():
+        stejny = [k for k in kandidati if k.split("/")[0] == predmet]
+        vysledek.update(stejny or kandidati)
+    return sorted(vysledek)
+
+
+def mezera_dalsich_zdroju(pozn, rel):
+    reg = nacti_registr()
+    for k in zdroje_poznamky(pozn, reg):
+        if k != rel and reg[k].get("stav") == "hotovo" and (TREZOR / k).is_file():
+            data = nacti_kontrolu(TREZOR / k)
+            if data and mezera(data):
+                return True
+    return False
+
+
+def ctverice_otisku(o):
+    """Čtveřice slov z cache (měřítko podobnosti textů), None u krátkého nebo chybějícího textu."""
+    c = CACHE / f"{o[:16]}.md"
+    if not c.exists():
+        return None
+    slova = re.findall(r"\w{2,}", c.read_text(errors="ignore").split("\n", 1)[-1].lower())[:PODOBNOST_SLOV]
+    ctverice = {" ".join(slova[i:i + 4]) for i in range(max(0, len(slova) - 3))}
+    return ctverice if len(ctverice) >= PODOBNOST_MIN else None
+
+
+def shoda(ta, tb):
+    """(verze téhož textu?, shoda v %) – stejné měřítko jako u podobných duplicit."""
+    spolecne = len(ta & tb)
+    jaccard, obsazeni = spolecne / len(ta | tb), spolecne / min(len(ta), len(tb))
+    return jaccard >= 0.5 or obsazeni >= 0.8, round(max(jaccard, obsazeni) * 100)
+
+
+VICE_ZDROJU = ("predmet", "ukol", "zkouska")  # přehled předmětu a úkol smí odkazovat na víc souborů
+
+
+def ruzne_zdroje(pozn, reg, jen=None):
+    """Dvojice zdrojů poznámky, které nejsou verzemi téhož textu: [(a, b, shoda %)]."""
+    if frontmatter(pozn).get("typ") in VICE_ZDROJU:
+        return []
+    zdroje = [k for k in zdroje_poznamky(pozn, reg) if "otisk" in reg[k]]
+    if len(zdroje) < 2:
+        return []
+    texty_zdroju = {k: ctverice_otisku(reg[k]["otisk"]) for k in zdroje}
+    vysledek = []
+    for a, b in itertools.combinations(zdroje, 2):
+        if jen and jen not in (a, b) or reg[a]["otisk"] == reg[b]["otisk"] or not texty_zdroju[a] or not texty_zdroju[b]:
+            continue
+        podobne, procent = shoda(texty_zdroju[a], texty_zdroju[b])
+        if not podobne:
+            vysledek.append((a, b, procent))
+    return vysledek
+
+
+def over_slouceni(rel, zadana, T):
+    """Jedna poznámka na materiál: materiál musí být ve zdroji poznámky a sloučit jde jen verze téhož textu."""
+    pozn = najdi_poznamku(rel, zadana)
+    if pozn is None:
+        return
+    if zadana is not None and frontmatter(pozn).get("typ") not in VICE_ZDROJU \
+            and not {nfc(Path(rel).name), nfc(Path(rel).stem)} & odkazy_zdroju(pozn):
+        sys.exit(T["slouceni_zdroj"].format(m=Path(rel).name, p=pozn.stem))
+    for a, b, procent in ruzne_zdroje(pozn, nacti_registr(), jen=rel):
+        sys.exit(T["slouceni_ruzne"].format(p=pozn.stem, a=Path(a).name, b=Path(b).name, s=procent))
+
+
+def sloucene_poznamky(reg):
+    """Starší poznámky, které slučují různé materiály: [(poznámka, a, b, shoda %)] – k rozdělení."""
+    vysledek = []
+    for p, _ in poznamky():
+        if len(odkazy_zdroju(p)) > 1:
+            vysledek += [(p.stem, a, b, s) for a, b, s in ruzne_zdroje(p, reg)]
+    return vysledek
+
+
 def zbyva_neprecteno(data):
     """Nepřečtené části, které AI nevyřešila (`--vynech np1 "přečteno z originálu…"`)."""
     vyreseno = data.get("vynechano") or {}
@@ -1079,21 +1175,18 @@ def najdi_duplicity(reg):
                 vysledek.append({"typ": "stejne", "a": v["stejne_jako"], "b": k, "shoda": 100})
     texty_souboru = {}
     for k, v in sorted(reg.items()):
-        c = CACHE / f"{v['otisk'][:16]}.md"
-        if v["stav"] == "duplicita" or not c.exists():
+        if v["stav"] == "duplicita":
             continue
-        slova = re.findall(r"\w{2,}", c.read_text(errors="ignore").split("\n", 1)[-1].lower())[:PODOBNOST_SLOV]
-        ctverice = {" ".join(slova[i:i + 4]) for i in range(max(0, len(slova) - 3))}
-        if len(ctverice) >= PODOBNOST_MIN:
+        ctverice = ctverice_otisku(v["otisk"])
+        if ctverice:
             texty_souboru[k] = (v["otisk"], ctverice)
     for a, b in itertools.combinations(sorted(texty_souboru), 2):
         (oa, ta), (ob, tb) = texty_souboru[a], texty_souboru[b]
         if oa == ob or frozenset((oa, ob)) in nechat:
             continue
-        spolecne = len(ta & tb)
-        jaccard, obsazeni = spolecne / len(ta | tb), spolecne / min(len(ta), len(tb))
-        if jaccard >= 0.5 or obsazeni >= 0.8:
-            vysledek.append({"typ": "podobne", "a": a, "b": b, "shoda": round(max(jaccard, obsazeni) * 100)})
+        podobne, procent = shoda(ta, tb)
+        if podobne:
+            vysledek.append({"typ": "podobne", "a": a, "b": b, "shoda": procent})
     return vysledek
 
 
@@ -1110,21 +1203,88 @@ def nechat_obe(a, b):
     DUPLICITY_NECHAT.write_text(json.dumps(nechat))
 
 
+CACHE_SOUBOR = re.compile(r"([0-9a-f]{16})(?:\.md|-k\d+\.md|\.stara)?")
+
+
+def smaz_cache(o):
+    """Smaže cache jednoho otisku: text, kapitoly, obrázky i nedokončenou starou složku. Cizí soubory nechá."""
+    if not CACHE.is_dir():
+        return
+    for f in CACHE.iterdir():
+        m = CACHE_SOUBOR.fullmatch(f.name)
+        if m and m.group(1) == o:
+            if f.is_dir() and not f.is_symlink():
+                shutil.rmtree(f, ignore_errors=True)
+            else:
+                f.unlink(missing_ok=True)
+
+
+def uklid_cache(reg):
+    """Cache smazaných a změněných materiálů (otisk už v registru není) se uklidí."""
+    platne = {v["otisk"][:16] for v in reg.values() if isinstance(v, dict) and isinstance(v.get("otisk"), str)}
+    if not CACHE.is_dir():
+        return
+    for o in {m.group(1) for f in CACHE.iterdir() if (m := CACHE_SOUBOR.fullmatch(f.name))} - platne:
+        smaz_cache(o)
+
+
+def znovu(cesta):
+    """Vrátí materiál do fronty: cache se přečte znovu a AI ho zpracuje jako nový (poznámka zůstane)."""
+    T = texty()
+    p, rel = soubor_v_trezoru(cesta)
+    reg = nacti_registr()
+    z = reg.get(rel) or {}
+    if z.get("stav") == "duplicita":
+        sys.exit(T["znovu_duplicita"].format(m=rel, o=z.get("stejne_jako", "")))
+    h = otisk(p)
+    for o in {h[:16], str(z.get("otisk", ""))[:16]} - {""}:
+        if not any(v.get("otisk", "")[:16] == o and v.get("stav") == "hotovo" for k, v in reg.items() if k != rel):
+            smaz_cache(o)
+    reg[rel] = {"otisk": h, "stav": "ceka", "datum": date.today().isoformat(), **podpis(p)}
+    uloz_registr(reg)
+    print(T["znovu_hotovo"].format(m=rel))
+
+
+def zaloha_registru():
+    """Před první migrací nové verze uloží kopii registru (registr.zaloha-<verze>.json); drží poslední 3."""
+    try:
+        verze = json.loads((TREZOR / ".obsidian/plugins/druhy-mozek/manifest.json").read_text())["version"]
+    except Exception:
+        return
+    if not REGISTR.is_file() or not re.fullmatch(r"\d+\.\d+\.\d+", str(verze)):
+        return
+    cil = SYS / f"registr.zaloha-{verze}.json"
+    if not cil.exists():
+        shutil.copy2(REGISTR, cil)
+        os.utime(cil)  # pořadí záloh podle doby vzniku, ne podle stáří registru
+    zalohy = sorted(SYS.glob("registr.zaloha-*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+    for stara in zalohy[3:]:
+        if stara != cil:
+            stara.unlink()
+
+
 def prehled():
     CACHE.mkdir(parents=True, exist_ok=True)
     T = texty()
     reg = nacti_registr()
     existujici = {rel for _, rel in materialy()}
     # starší registr: „duplicita“ souboru, který už neexistuje (přesunutý originál) → soubor přebírá jeho roli
+    # hotovo jen s dokladem (poznámka odkazuje na soubor), jinak jde soubor k posouzení do fronty
     zive = {v["otisk"]: k for k, v in reg.items() if k in existujici and v["stav"] in ("hotovo", "preskoceno")}
+    odkazovane = None
     for k, v in reg.items():
         if v["stav"] == "duplicita" and k in existujici and v.get("stejne_jako") not in existujici:
             if v["otisk"] in zive:
                 v["stejne_jako"] = zive[v["otisk"]]
-            else:
+                continue
+            if odkazovane is None:
+                odkazovane = set().union(*(odkazy_zdroju(p) for p, _ in poznamky()))
+            v.pop("stejne_jako", None)
+            if {nfc(Path(k).name), nfc(Path(k).stem)} & odkazovane:
                 v["stav"] = "hotovo"
-                v.pop("stejne_jako", None)
                 zive[v["otisk"]] = k
+            else:
+                v["stav"] = "ceka"
     hotove_otisky = {v["otisk"]: k for k, v in reg.items() if v["stav"] in ("hotovo", "preskoceno")}
     fronta, uspora_puvodni, uspora_cista, videne = [], 0, 0, {}
 
@@ -1207,6 +1367,14 @@ def prehled():
                 poznamka = "VELKÉ – zeptej se uživatele: po kapitolách (pole kapitoly), jen shrnutí, nebo přeskočit"
             elif typ == "pdf" and ocr:
                 poznamka = "SKEN (OCR) – text rozpoznán v macOS, originál otevřít jen u nejasných stran"
+            casti = rel.split("/")
+            if len(casti) >= 4 and casti[1] == "Úkoly":  # <Předmět>/Úkoly/<N Název>/soubor
+                ukol = next((q for q in sorted((TREZOR / "/".join(casti[:3])).glob("*.md"))
+                             if frontmatter(q).get("typ") in ("ukol", "zkouska")), None)
+                polozka["ukol"] = nfc(str(ukol.relative_to(TREZOR))) if ukol else ""
+                if not poznamka:
+                    poznamka = ("ÚKOL – zadání → úplně do poznámky úkolu; podklad → učivo s vlastní poznámkou, "
+                                "odkaz z poznámky úkolu; vlastní práce → jen do přehledu, --preskoc")
             # odhad, kolik by stálo čtení originálu (PDF/prezentace AI čte i jako obrázky)
             puvodni = 1600 if typ == "obrázek" else t + (bloku * 1500 if typ in ("pdf", "prezentace") else 0)
             uspora_puvodni += puvodni
@@ -1231,6 +1399,7 @@ def prehled():
     for rel in [k for k in reg if k not in existujici]:
         del reg[rel]
     uloz_registr(reg)
+    uklid_cache(reg)
     duplicity = najdi_duplicity(reg)
     (SYS / "duplicity.json").write_text(json.dumps(duplicity, ensure_ascii=False, indent=1))
     ignorovane = nacti_ignorovane()
@@ -1263,10 +1432,11 @@ def prehled():
     # bez stropů roste poznámka s materiálem: odhad psaní ~ polovina čtení, nejméně VYSTUP (ověřit měřením /zpracuj)
     odhad_celkem = sum(f["tokeny"] + max(VYSTUP, f["tokeny"] // 2) for f in fronta)
     # poznámky ve fronta.json zůstávají česky (čte je AI), do Fronta.md jdou v jazyce uživatele
-    pozn_preklad = {"SKEN (OCR)": T["pozn_sken_ocr"], "SKEN": T["pozn_sken"], "VELKÉ": T["pozn_velke"],
+    pozn_preklad = {"ÚKOL": T["pozn_ukol"], "SKEN (OCR)": T["pozn_sken_ocr"], "SKEN": T["pozn_sken"], "VELKÉ": T["pozn_velke"],
                     "AI přečte": T["pozn_obrazek"], "OCR": T["pozn_ocr"]}
     preloz = lambda text: next((v for k, v in pozn_preklad.items() if text.startswith(k)), text)
     k_overeni = k_overeni_hotovych(reg, T)
+    sloucene = sloucene_poznamky(reg)
     radky = [
         f"# {T['fronta_nadpis']}", "",
         f"## {T['souhrn']}",
@@ -1300,6 +1470,11 @@ def prehled():
         for pozn, zdroj, mista in k_overeni:
             dalsich = T["k_overeni_dalsich"].format(n=len(mista) - 5) if len(mista) > 5 else ""
             radky.append(f"- [[{pozn}]] ({zdroj.replace('|', '/')}): " + "; ".join(m.replace("|", "/") for m in mista[:5]) + dalsich)
+    if sloucene:
+        radky += ["", f"## {T['sloucene_nadpis']}", T["sloucene_rada"], ""]
+        for pozn, a, b, procent in sloucene:
+            nazev = re.sub(r"[\[\]|\x00-\x1f]", " ", pozn)
+            radky.append(f"- [[{nazev}]]: {ciste_jmeno(a)} ↔ {ciste_jmeno(b)} ({T['duplicity_podobne'].format(s=procent)})")
     FRONTA.write_text("\n".join(radky) + "\n")
     (SYS / "fronta.json").write_text(json.dumps(fronta, ensure_ascii=False, indent=1))
 
@@ -1580,7 +1755,7 @@ def frontmatter(p):
 def poznamky():
     for p in sorted(TREZOR.rglob("*.md")):
         rel = p.relative_to(TREZOR)
-        if rel.parts[0] not in ("_Systém", "_Archiv", ".obsidian", ".claude", ".trash"):
+        if nfc(rel.parts[0]) not in ("_Systém", "_Archiv", ".obsidian", ".claude", ".trash"):
             yield p, nfc(str(rel))
 
 
@@ -1602,11 +1777,14 @@ if __name__ == "__main__":
     # jen jeden běh najednou (Obsidian i AI ho spouštějí souběžně) – jinak by se přepisoval registr
     zamek = open(ZAMEK, "w")
     fcntl.flock(zamek, fcntl.LOCK_EX)
+    zaloha_registru()
     migruj_inbox()
     if len(sys.argv) in (3, 4) and sys.argv[1] == "--hotovo":
         oznac(sys.argv[2], "hotovo", sys.argv[3] if len(sys.argv) == 4 else None)
     elif len(sys.argv) == 3 and sys.argv[1] == "--preskoc":
         oznac(sys.argv[2], "preskoceno")
+    elif len(sys.argv) == 3 and sys.argv[1] == "--znovu":
+        znovu(sys.argv[2])
     elif len(sys.argv) in (3, 4, 5, 6) and sys.argv[1] == "--kontrola":
         argumenty, kapitola = sys.argv[2:], None
         if "--kapitola" in argumenty[1:]:

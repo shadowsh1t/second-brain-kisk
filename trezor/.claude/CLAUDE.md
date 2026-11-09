@@ -68,8 +68,9 @@ Kód každého předmětu je ve vlastnosti `kod` jeho přehledu `<Předmět>/<P�
    a zapiš `--k-overeni "<cesta>" "Zpracováno jen jako shrnutí (VELKÉ)"`, ať je mezera vidět.
 6. Vlastní odevzdané práce (soubory začínající UČO z `_Systém/nastaveni.json`, `HOTOVO_`, `PŘÍRUČKA`, texty úkolů psané uživatelem) nesumarizuj –
    jen je zapiš do přehledu předmětu pod „Odevzdáno“ a označ `--preskoc`. Stačí přečíst prvních ~20 řádků cache.
-7. Duplicity řeší skript sám, neotevírej je. Dvě různé verze téže přednášky (podobný název, např. `…_redesign_xxx.pptx`)
-   zpracuj do jedné poznámky a obě označ `--hotovo`.
+7. Duplicity řeší skript sám, neotevírej je. Každý materiál má vlastní poznámku. Jen dvě verze téže přednášky (stejný text,
+   podobný název, např. `…_redesign_xxx.pptx`) zpracuj do jedné poznámky se všemi zdroji ve vlastnosti `zdroje:` (seznam)
+   a každou označ `--hotovo` zvlášť (kontrola úplnosti běží pro každý zdroj). Různé materiály neslučuj – skript to odmítne.
 
 ## Typy poznámek (vlastnost `typ`)
 

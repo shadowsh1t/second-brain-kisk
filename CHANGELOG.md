@@ -3,6 +3,15 @@
 All notable changes to Second Brain for KISK. The newest version is at the top.
 When a new version is released, Obsidian offers it under **🆕 A new version of Second Brain is available** with a link to this list.
 
+## 1.1.5 – 2026-11-09
+
+- **One note per material** – every material gets its own note. Only versions of the same text can share a note, with all of them listed in the `zdroje` property, and completeness is checked for each of them. A note that combines different materials isn't accepted, and older ones show up in the queue under **Merged notes to split**.
+- **Assignments** – files in an assignment folder are linked to the assignment: the brief goes into the assignment note, source materials get their own notes like any other study material, and your own work stays out of the notes.
+- **🔁 Put a material back in the queue** – a new button on Home processes an already processed material again (it is read once more, your note stays).
+- **Neuro Roadmap** – when Second Brain adds something to the Neuro Roadmap settings, the notification says exactly what.
+- A copy of the material list is saved before each update changes it, files of deleted materials are removed from the cache, and a missing Word template gives a clear message.
+- Fixed: folders whose names were stored with decomposed accents (common on macOS) weren't always recognised, so system files could end up in the queue or in the backup.
+
 ## 1.1.4 – 2026-11-09
 
 - **Complete notes for exams** – before a material is marked as processed, its note is compared with the material: headings, definitions, tables, charts, dates, numbers, names, links and lists. With AI, a material is marked done only when the note covers everything or the AI explains why something is left out. Without AI it is marked anyway and you see how much of the material your note covers. Gaps show up under **🔍 To verify** in the queue and on Home, and the note gets the property `uplnost` (`uplna` / `k-overeni`).

@@ -427,7 +427,12 @@
     "Hotovo do": "Hotovo do",
     "Nic nenalezeno.": "Nič sa nenašlo.",
     "Otevřít soubor": "Otvoriť súbor",
-    "Nový předmět": "Nový predmet"
+    "Nový předmět": "Nový predmet",
+    "🔁 Vrátit materiál do fronty (zpracovat znovu)": "🔁 Vrátiť materiál do frontu (spracovať znova)",
+    "Který zpracovaný materiál chceš zpracovat znovu?": "Ktorý spracovaný materiál chceš spracovať znova?",
+    "Druhý mozek doplnil do nastavení Neuro Roadmap (nic nesmazal): {0}": "Druhý mozog doplnil do nastavení Neuro Roadmap (nič nezmazal): {0}",
+    "🔁 Vráceno do fronty: {0}": "🔁 Vrátené do frontu: {0}",
+    "Nepodařilo se vrátit do fronty: {0}": "Nepodarilo sa vrátiť do frontu: {0}"
   },
   "en": {
     "📥 Zpracovat nové materiály (AI)": "📥 Process new materials (AI)",
@@ -857,7 +862,12 @@
     "Hotovo do": "Done until",
     "Nic nenalezeno.": "Nothing found.",
     "Otevřít soubor": "Open file",
-    "Nový předmět": "New course"
+    "Nový předmět": "New course",
+    "🔁 Vrátit materiál do fronty (zpracovat znovu)": "🔁 Put a material back in the queue (process again)",
+    "Který zpracovaný materiál chceš zpracovat znovu?": "Which processed material do you want to process again?",
+    "Druhý mozek doplnil do nastavení Neuro Roadmap (nic nesmazal): {0}": "Second Brain added to the Neuro Roadmap settings (nothing removed): {0}",
+    "🔁 Vráceno do fronty: {0}": "🔁 Back in the queue: {0}",
+    "Nepodařilo se vrátit do fronty: {0}": "Couldn't put it back in the queue: {0}"
   },
   "uk": {
     "📥 Zpracovat nové materiály (AI)": "📥 Обробити нові матеріали (ШІ)",
@@ -1287,6 +1297,11 @@
     "Hotovo do": "Виконано до",
     "Nic nenalezeno.": "Нічого не знайдено.",
     "Otevřít soubor": "Відкрити файл",
-    "Nový předmět": "Новий предмет"
+    "Nový předmět": "Новий предмет",
+    "🔁 Vrátit materiál do fronty (zpracovat znovu)": "🔁 Повернути матеріал у чергу (обробити знову)",
+    "Který zpracovaný materiál chceš zpracovat znovu?": "Який оброблений матеріал хочеш обробити знову?",
+    "Druhý mozek doplnil do nastavení Neuro Roadmap (nic nesmazal): {0}": "Другий мозок доповнив налаштування Neuro Roadmap (нічого не видалив): {0}",
+    "🔁 Vráceno do fronty: {0}": "🔁 Повернуто в чергу: {0}",
+    "Nepodařilo se vrátit do fronty: {0}": "Не вдалося повернути в чергу: {0}"
   }
 }

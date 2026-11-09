@@ -167,6 +167,8 @@ def main():
     prehled = slozka / f"{arg.predmet}.md"
     if "/" in arg.predmet or ".." in arg.predmet or not prehled.exists():
         sys.exit(T["chyba_predmet"].format(p=arg.predmet))
+    if not SABLONA.is_file():  # bez šablony nevznikne ani rozdělaný úkol
+        sys.exit(T["chyba_sablona"])
     termin = ""
     if arg.termin:
         try:

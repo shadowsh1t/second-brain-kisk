@@ -61,6 +61,8 @@ const souboryVeSlozce = (koren, rel = "") => fs.readdirSync(path.join(koren, rel
   const r = rel ? `${rel}/${e.name}` : e.name;
   return e.isDirectory() ? souboryVeSlozce(koren, r) : e.isFile() ? [r] : [];
 });
+// macOS vrací názvy z disku často v NFD (rozložená diakritika) – cesty porovnávat vždy v NFC
+const nfc = (s) => String(s ?? "").normalize("NFC");
 const otiskSouboru = (cesta) => crypto.createHash("sha256").update(fs.readFileSync(cesta)).digest("hex");
 const bezpecnaCesta = (rel) => typeof rel === "string" && rel && !path.isAbsolute(rel) && !rel.split("/").includes("..");
 // otevírat jen stránky tohoto repozitáře na GitHubu
@@ -200,8 +202,7 @@ module.exports = class DruhyMozek extends Plugin {
 
       // automatická záloha po změně čehokoli v trezoru (kromě souborů, které se mění samy)
       const zmena = (f) => {
-        const cesta = f?.path || "";
-        if (ZALOHA_BEZ_ZMENY.includes(cesta) || ZALOHA_VYNECHAT.some((v) => cesta.startsWith(v))) return;
+        if (this.bezZalohyPoZmene(f?.path || "")) return;
         this.naplanujZalohu();
       };
       for (const udalost of ["create", "modify", "rename", "delete"]) this.registerEvent(this.app.vault.on(udalost, zmena));
@@ -339,6 +340,8 @@ module.exports = class DruhyMozek extends Plugin {
       { id: "poznamka", ikona: "file-pen", nazev: T("📝 Nová poznámka k materiálu"),
         spust: () => new MaterialVyber(this, (m) => this.novaPoznamka(m), T("Ke kterému materiálu chceš psát poznámku?")).open() },
       { id: "rucne-hotovo", jenRucne: true, ikona: "check", nazev: T("✔️ Označit materiál jako zpracovaný (ručně)"), spust: () => new MaterialVyber(this).open() },
+      { id: "znovu", ikona: "rotate-ccw", nazev: T("🔁 Vrátit materiál do fronty (zpracovat znovu)"),
+        spust: () => new MaterialVyber(this, (m) => this.vratDoFronty(m.soubor), T("Který zpracovaný materiál chceš zpracovat znovu?"), () => this.materialyKVraceni()).open() },
       { id: "novy-ukol", ikona: "file-plus", nazev: T("📝 Nový úkol ve Wordu (šablona KISK)"), spust: () => new UkolModal(this).open() },
       { id: "prevod", ikona: "file-input", nazev: T("📄 Převést hotovou práci do šablony KISK"), spust: () => new DocxVyber(this).open() },
       { id: "hotovo", ikona: "check-circle", nazev: T("✅ Označit úkol jako odevzdaný"), spust: () => this.oznacHotovo() },
@@ -657,7 +660,7 @@ module.exports = class DruhyMozek extends Plugin {
     let vzor = "";
     try { vzor = (fs.readFileSync(path.join(this.zaklad, "_Systém", "Šablony", "Přednáška.md"), "utf8").match(/^.*::.*$/m) || [""])[0].trim(); } catch (e) { /* bez šablony */ }
     const karty = [], videne = new Set();
-    const soubory = this.app.vault.getMarkdownFiles().filter((f) => !/^(_Systém|_Archiv)\//.test(f.path) && (!predmet || f.path.startsWith(predmet + "/")));
+    const soubory = this.app.vault.getMarkdownFiles().filter((f) => !/^(_Systém|_Archiv)\//.test(nfc(f.path)) && (!predmet || nfc(f.path).startsWith(nfc(predmet) + "/")));
     for (const f of soubory) {
       const text = (await this.app.vault.cachedRead(f)).replace(/```[\s\S]*?```/g, "").replace(/`[^`\n]*`/g, "");  // ukázky v kódu nejsou kartičky
       for (const radek of text.split("\n")) {
@@ -870,6 +873,7 @@ module.exports = class DruhyMozek extends Plugin {
     const verze = manifest?.version || null;
     const nr = pluginy.plugins[ROADMAP_ID];
     let ulozitNastaveni = false;
+    const zmenyRoadmap = [];  // co jsme doplnili do nastavení Neuro Roadmap – uživatel se to vždy dozví
 
     // Neuro Roadmap je volitelný: když ho někdo nemá, není to chyba – jen když ho měl a teď chybí
     if (!manifest) bod("Plugin Neuro Roadmap", this.data.posledniVerze ? "varovani" : "ok",
@@ -901,7 +905,7 @@ module.exports = class DruhyMozek extends Plugin {
             if (chybi.length) { mapa[klic] = hodnota; doplneno.push(`${klic}: ${chybi.join(", ")}`); }
           }
         }
-        if (doplneno.length) ulozitNastaveni = true;
+        if (doplneno.length) { ulozitNastaveni = true; zmenyRoadmap.push(...doplneno); }
         if (neznamo.length) bod("Vlastnosti systému (kod, termin, stav, typ)", "varovani", T("Plugin už nezná položky: {0}", neznamo.join(", ")));
         else if (doplneno.length) bod("Vlastnosti systému (kod, termin, stav, typ)", "opraveno", T("znovu doplněno – {0}", doplneno.join("; ")));
         else bod("Vlastnosti systému (kod, termin, stav, typ)", "ok");
@@ -910,7 +914,7 @@ module.exports = class DruhyMozek extends Plugin {
       // 3) vyloučené systémové složky (šablony nesmí být úkoly)
       if (s && "excludedPathPrefixes" in s) {
         const { hodnota, chybi } = doplnSeznam(s.excludedPathPrefixes, VYLOUCENE_SLOZKY.join(", "));
-        if (chybi.length) { s.excludedPathPrefixes = hodnota; ulozitNastaveni = true; bod("Vyloučení složky _Systém", "opraveno", T("znovu nastaveno")); }
+        if (chybi.length) { s.excludedPathPrefixes = hodnota; ulozitNastaveni = true; zmenyRoadmap.push(`excludedPathPrefixes: ${chybi.join(", ")}`); bod("Vyloučení složky _Systém", "opraveno", T("znovu nastaveno")); }
         else bod("Vyloučení složky _Systém", "ok");
       } else bod("Vyloučení složky _Systém", "varovani", T("Plugin už nemá nastavení vyloučených složek."));
 
@@ -920,6 +924,7 @@ module.exports = class DruhyMozek extends Plugin {
           await new Promise((ok) => setTimeout(ok, 1500)); // nech plugin přeindexovat
         } catch (e) {
           bod("Uložení oprav do nastavení", "chyba", e.message);
+          zmenyRoadmap.length = 0;  // nic se neuložilo
         }
       }
 
@@ -988,7 +993,7 @@ module.exports = class DruhyMozek extends Plugin {
     if (!automaticky || zmenaVerze || celkem !== "ok" || puvodniStav !== celkem) await this.zapisZpravu();
     this.aktualizujStavovyRadek();
     this.prekresliStav();
-    this.upozorni({ celkem, verze, predchozi, zmenaVerze, automaticky });
+    this.upozorni({ celkem, verze, predchozi, zmenaVerze, automaticky, zmenyRoadmap });
   }
 
   otisk(rel) {
@@ -1071,8 +1076,15 @@ module.exports = class DruhyMozek extends Plugin {
     this.casovacZalohy = setTimeout(() => this.zalohuj({ tise: true }), ZALOHA_PO_ZMENE_MS);
   }
 
+  // soubory, které se mění samy (fronta, registr, cache) – jejich změna zálohu nespouští
+  bezZalohyPoZmene(cesta) {
+    const c = nfc(cesta);
+    return ZALOHA_BEZ_ZMENY.includes(c) || ZALOHA_VYNECHAT.some((v) => c.startsWith(v));
+  }
+
   zahrnoutDoZalohy(rel) {
     if (!rel) return true;
+    rel = nfc(rel);
     if (ZALOHA_VZDY.includes(rel)) return true;
     if (ZALOHA_VYNECHAT.some((v) => rel === v || rel.startsWith(v + "/"))) return false;
     const jmeno = path.basename(rel);
@@ -1192,7 +1204,7 @@ module.exports = class DruhyMozek extends Plugin {
 
   // ---------- Upozornění, stav, zpráva ----------
 
-  upozorni({ celkem, verze, predchozi, zmenaVerze, automaticky }) {
+  upozorni({ celkem, verze, predchozi, zmenaVerze, automaticky, zmenyRoadmap = [] }) {
     const uvod = zmenaVerze ? T("Neuro Roadmap se aktualizoval ({0} → {1}). ", predchozi, verze) : "";
     // vždy jen jedno upozornění z kontroly – nové nahradí staré, aby se nehromadila
     this.posledniUpozorneni?.hide();
@@ -1208,6 +1220,8 @@ module.exports = class DruhyMozek extends Plugin {
       chyba: T("🧠❌ {0}Kontrola druhého mozku hlásí chybu. Klikni pro podrobnosti a opravu.", uvod),
     }[celkem];
     frag.createDiv({ text, cls: "druhy-mozek-upozorneni-text" });
+    if (zmenyRoadmap.length) frag.createDiv({ cls: "druhy-mozek-upozorneni-text",
+      text: T("Druhý mozek doplnil do nastavení Neuro Roadmap (nic nesmazal): {0}", zmenyRoadmap.join("; ")) });
     const zavrit = frag.createEl("button", { text: "×", cls: "druhy-mozek-zavrit", attr: { "aria-label": T("Zavřít") } });
     const n = new Notice(frag, celkem === "opraveno" ? 12000 : 0);
     // × zavře upozornění bez otevírání zprávy, klik jinam otevře podrobnosti
@@ -1366,6 +1380,37 @@ module.exports = class DruhyMozek extends Plugin {
   vlastniPrefix() {
     const n = this.nastaveni();
     return n.uco ? `${n.uco}-${n.jmeno_soubor}` : null;
+  }
+
+  // soubory ve vkládací složce a volně v kořeni předmětu (bez poznámek a přehledu předmětu)
+  souboryKZarazeni() {
+    const predmety = new Set(this.predmety().map((p) => nfc(p.nazev)));
+    return this.app.vault.getFiles().filter((f) => {
+      const cesta = nfc(f.path), c = cesta.split("/");
+      if (c.length !== 2 || cesta === "_Vkládání učiva/Vkládání učiva.md") return false;
+      return c[0] === "_Vkládání učiva" || (predmety.has(c[0]) && c[1] !== `${c[0]}.md` && f.extension !== "md");
+    });
+  }
+
+  // zpracované a přeskočené materiály z registru (k vrácení do fronty)
+  materialyKVraceni() {
+    try {
+      const reg = JSON.parse(fs.readFileSync(path.join(this.zaklad, "_Systém", "registr.json"), "utf8"));
+      return Object.entries(reg).filter(([, v]) => ["hotovo", "preskoceno"].includes(v?.stav))
+        .map(([soubor]) => ({ soubor })).sort((a, b) => a.soubor.localeCompare(b.soubor));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async vratDoFronty(soubor) {
+    try {
+      const vystup = await this.spustPython("priprav.py", ["--znovu", soubor]);
+      await this.spustPython("priprav.py", []);
+      new Notice(vystup.trim() || T("🔁 Vráceno do fronty: {0}", soubor), 10000);
+    } catch (e) {
+      this.chyba(T("Nepodařilo se vrátit do fronty: {0}", e.message), "znovu");
+    }
   }
 
   predmety() {
@@ -2186,7 +2231,7 @@ class KartickyModal extends Modal {
   }
 
   k_opakovani(predmet) {
-    return this.vsechny.filter((k) => (!predmet || k.soubor.startsWith(predmet + "/")) && this.plugin.kartickaKOpakovani(k));
+    return this.vsechny.filter((k) => (!predmet || nfc(k.soubor).startsWith(nfc(predmet) + "/")) && this.plugin.kartickaKOpakovani(k));
   }
 
   zacni() {
@@ -2475,13 +2520,15 @@ class ZmenaZalohyModal extends Modal {
 }
 
 class MaterialVyber extends FuzzySuggestModal {
-  constructor(plugin, poVyberu = null, vyzva = null) {
+  constructor(plugin, poVyberu = null, vyzva = null, polozky = null) {
     super(plugin.app);
     this.plugin = plugin;
     this.poVyberu = poVyberu;
+    this.polozky = polozky;
     this.setPlaceholder(vyzva || T("Který materiál jsi zpracoval ručně?"));
   }
   getItems() {
+    if (this.polozky) return this.polozky();
     try {
       return JSON.parse(fs.readFileSync(path.join(this.plugin.zaklad, "_Systém", "fronta.json"), "utf8"));
     } catch (e) {
@@ -2531,12 +2578,7 @@ class ZaraditVyber extends FuzzySuggestModal {
     this.setPlaceholder(T("Vyber soubor k zařazení…"));
   }
   getItems() {
-    const predmety = new Set(this.plugin.predmety().map((p) => p.nazev));
-    return this.app.vault.getFiles().filter((f) => {
-      const c = f.path.split("/");
-      if (c.length !== 2 || f.path === "_Vkládání učiva/Vkládání učiva.md") return false;
-      return c[0] === "_Vkládání učiva" || (predmety.has(c[0]) && c[1] !== `${c[0]}.md` && f.extension !== "md");
-    });
+    return this.plugin.souboryKZarazeni();
   }
   getItemText(f) {
     return f.path;

@@ -459,8 +459,154 @@ else:
         reg_p.write_text(json.dumps(reg))
         self.spust("_Systém/priprav.py")
         z = json.loads(reg_p.read_text())[f"{PREDMET}/a.pptx"]
+        # bez dokladu se stav nepředstírá: soubor jde k posouzení do fronty
+        self.assertEqual(z["stav"], "ceka")
+        self.assertNotIn("stejne_jako", z)
+        self.assertIn(f"{PREDMET}/a.pptx", [f["soubor"] for f in json.loads((self.t / "_Systém/fronta.json").read_text())])
+        # s dokladem (poznámka odkazuje na soubor) je hotovo
+        reg = json.loads(reg_p.read_text())
+        reg[f"{PREDMET}/a.pptx"].update(stav="duplicita", stejne_jako=f"{PREDMET}/uz neni.pptx")
+        reg_p.write_text(json.dumps(reg))
+        self.poznamka(f"{PREDMET}/a.pptx", "Text přednášky o knihovnách")
+        self.spust("_Systém/priprav.py")
+        z = json.loads(reg_p.read_text())[f"{PREDMET}/a.pptx"]
         self.assertEqual(z["stav"], "hotovo")
         self.assertNotIn("stejne_jako", z)
+
+    def test_znovu_vrati_material_do_fronty(self):
+        """--znovu vrátí zpracovaný materiál do fronty a přečte ho znovu; duplicitu a cestu ven odmítne."""
+        self.nastav(ocr=False)
+        m = f"{PREDMET}/a.pptx"
+        pptx(self.t / m, "Text přednášky o knihovnách")
+        self.spust("_Systém/priprav.py")
+        self.hotovo(m)
+        reg_p = self.t / "_Systém/registr.json"
+        cache = self.t / f"_Systém/cache/{json.loads(reg_p.read_text())[m]['otisk'][:16]}.md"
+        cache.write_text(cache.read_text().split("\n", 1)[0] + "\n\nrozbitá\n")  # platná hlavička, špatný obsah
+        r = self.spust("_Systém/priprav.py", "--znovu", m)
+        self.assertIn(m, r.stdout)
+        self.assertEqual(json.loads(reg_p.read_text())[m]["stav"], "ceka")
+        self.spust("_Systém/priprav.py")
+        self.assertEqual([f["soubor"] for f in json.loads((self.t / "_Systém/fronta.json").read_text())], [m])
+        self.assertIn("Text přednášky o knihovnách", cache.read_text(), "cache se přečte znovu")
+        # duplicita se vrací přes originál
+        shutil.copy(self.t / m, self.t / PREDMET / "kopie.pptx")
+        self.hotovo(m)
+        self.spust("_Systém/priprav.py")
+        r = self.spust("_Systém/priprav.py", "--znovu", f"{PREDMET}/kopie.pptx", ocekavam_chybu=True)
+        self.assertIn("a.pptx", r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+        self.spust("_Systém/priprav.py", "--znovu", "../mimo.pptx", ocekavam_chybu=True)
+        self.spust("_Systém/priprav.py", "--znovu", f"{PREDMET}/neni.pptx", ocekavam_chybu=True)
+
+    def test_uklid_cache_smazanych(self):
+        """Cache, obrázky a kapitoly smazaného nebo změněného materiálu se uklidí; cizí soubory v cache zůstanou."""
+        self.nastav(ocr=False)
+        velka_pptx(self.t / PREDMET / "velka.pptx", 60, 2000)
+        pptx(self.t / PREDMET / "a.pptx", "Text přednášky o knihovnách")
+        pptx(self.t / PREDMET / "b.pptx", "Původní text")
+        self.spust("_Systém/priprav.py")
+        reg = json.loads((self.t / "_Systém/registr.json").read_text())
+        cache = self.t / "_Systém/cache"
+        o = {Path(k).name: v["otisk"][:16] for k, v in reg.items()}
+        (cache / o["velka.pptx"]).mkdir(exist_ok=True)
+        (cache / o["velka.pptx"] / "img1.png").write_bytes(b"x")
+        (cache / f"{o['velka.pptx']}.stara").mkdir()
+        (cache / "moje.txt").write_text("cizí")
+        self.assertTrue(list(cache.glob(f"{o['velka.pptx']}-k*.md")))
+        (self.t / PREDMET / "velka.pptx").unlink()
+        pptx(self.t / PREDMET / "b.pptx", "Nový text po úpravě")
+        self.spust("_Systém/priprav.py")
+        self.assertEqual(sorted(x.name for x in cache.iterdir() if x.name.startswith((o["velka.pptx"], o["b.pptx"]))), [])
+        self.assertTrue((cache / f"{o['a.pptx']}.md").exists())
+        self.assertTrue((cache / "moje.txt").exists())
+
+    def test_jedna_poznamka_na_material(self):
+        """Poznámka musí mít materiál ve zdroji; sloučit jde jen verze téhož textu, úplnost platí za všechny zdroje."""
+        self.nastav(ocr=False, ai="claude")
+        spolecny = " ".join(f"Knihovna číslo {i} spravuje fond a katalog." for i in range(40))
+        pptx(self.t / PREDMET / "v1.pptx", spolecny)
+        pptx(self.t / PREDMET / "v2.pptx", spolecny + " Doplněný slajd o metadatech.")
+        pptx(self.t / PREDMET / "jine.pptx", " ".join(f"Sociologie médií téma {i} a komunikace." for i in range(40)))
+        self.spust("_Systém/priprav.py")
+        telo = lambda m: (self.t / f"_Systém/cache/{json.loads((self.t / '_Systém/registr.json').read_text())[m]['otisk'][:16]}.md").read_text().split("\n", 1)[-1]
+        pozn = self.t / PREDMET / "Poznámky/Spojené.md"
+        pozn.parent.mkdir(parents=True, exist_ok=True)
+        # materiál, který poznámka nemá ve zdroji, se přes zadanou poznámku neoznačí
+        pozn.write_text(f'---\ntyp: prednaska\nzdroj: "[[v1.pptx]]"\n---\n\n{telo(f"{PREDMET}/v1.pptx")}\n{telo(f"{PREDMET}/v2.pptx")}\n')
+        r = self.spust("_Systém/priprav.py", "--hotovo", f"{PREDMET}/v2.pptx", str(pozn.relative_to(self.t)), ocekavam_chybu=True)
+        self.assertIn("zdroje", r.stderr)
+        # verze téhož textu ve `zdroje` → obě projdou, každá s vlastní kontrolou
+        pozn.write_text(f'---\ntyp: prednaska\nzdroje:\n  - "[[v1.pptx]]"\n  - "[[v2.pptx]]"\n---\n\n{telo(f"{PREDMET}/v1.pptx")}\n{telo(f"{PREDMET}/v2.pptx")}\n')
+        self.spust("_Systém/priprav.py", "--hotovo", f"{PREDMET}/v1.pptx")
+        self.spust("_Systém/priprav.py", "--hotovo", f"{PREDMET}/v2.pptx")
+        self.assertIn("uplnost: uplna", pozn.read_text())
+        # jiný materiál do stejné poznámky nepatří
+        pozn.write_text(pozn.read_text().replace('  - "[[v2.pptx]]"\n', '  - "[[v2.pptx]]"\n  - "[[jine.pptx]]"\n')
+                        + telo(f"{PREDMET}/jine.pptx") + "\n")
+        r = self.spust("_Systém/priprav.py", "--hotovo", f"{PREDMET}/jine.pptx", ocekavam_chybu=True)
+        self.assertIn("jine.pptx", r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+        # starší sloučená poznámka se ukáže k rozdělení
+        self.spust("_Systém/priprav.py")
+        fronta = (self.t / "_Systém/Fronta.md").read_text()
+        self.assertIn("[[Spojené]]", fronta)
+        self.assertIn("jine.pptx", fronta.split("[[Spojené]]", 1)[1].split("\n", 1)[0])
+        # úplnost sloučené poznámky: mezera v jednom zdroji → k ověření
+        pozn.write_text(pozn.read_text().replace('  - "[[jine.pptx]]"\n', ""))
+        self.spust("_Systém/priprav.py", "--k-overeni", f"{PREDMET}/v1.pptx", "Graf na slajdu 3 bez dat")
+        self.spust("_Systém/priprav.py", "--hotovo", f"{PREDMET}/v2.pptx")
+        self.assertIn("uplnost: k-overeni", pozn.read_text())
+        # přehled předmětu smí odkazovat na víc různých souborů (osnova, harmonogram)
+        prehled = self.t / PREDMET / f"{PREDMET}.md"
+        prehled.write_text(prehled.read_text().replace("typ: predmet", 'typ: predmet\nzdroje:\n  - "[[v1.pptx]]"\n  - "[[jine.pptx]]"', 1))
+        self.spust("_Systém/priprav.py")
+        self.assertNotIn(f"[[{PREDMET}]]", (self.t / "_Systém/Fronta.md").read_text())
+
+    def test_podklady_k_ukolu(self):
+        """Soubor ve složce úkolu jde do fronty jako učivo s odkazem na úkol; vlastní práce do fronty nejde."""
+        self.nastav(ocr=False)
+        r = self.spust("_Systém/novy_ukol.py", PREDMET, "Rešerše", "--termin", "2026-12-01", "--neotvirat")
+        dokument, ukol = r.stdout.strip().split("\n")
+        slozka = (self.t / dokument).parent
+        pptx(slozka / "Podklady k rešerši.pptx", "Jak hledat v katalogu a databázích")
+        self.spust("_Systém/priprav.py")
+        fronta = json.loads((self.t / "_Systém/fronta.json").read_text())
+        self.assertEqual([Path(f["soubor"]).name for f in fronta], ["Podklady k rešerši.pptx"], "vlastní práce ve frontě není")
+        self.assertEqual(fronta[0]["ukol"], ukol)
+        self.assertTrue(fronta[0]["poznamka"].startswith("ÚKOL"), fronta[0]["poznamka"])
+        self.assertIn("Podklady k rešerši.pptx", (self.t / "_Systém/Fronta.md").read_text())
+
+    def test_systemove_slozky_v_nfd(self):
+        """Složka s diakritikou zapsanou v NFD (macOS) se vynechá stejně jako v NFC."""
+        self.nastav(ocr=False)
+        shutil.rmtree(self.t / "_Přehledy")  # APFS by jinak použil existující složku v NFC
+        nfd = self.t / unicodedata.normalize("NFD", "_Přehledy") / "Týden.pptx"
+        nfd.parent.mkdir(parents=True)
+        self.assertIn(unicodedata.normalize("NFD", "_Přehledy"), os.listdir(self.t))
+        pptx(nfd, "Týdenní přehled")
+        pptx(self.t / PREDMET / "a.pptx", "Text přednášky o knihovnách")
+        self.spust("_Systém/priprav.py")
+        self.assertEqual([Path(f["soubor"]).name for f in json.loads((self.t / "_Systém/fronta.json").read_text())], ["a.pptx"])
+
+    def test_zaloha_registru_pred_migraci(self):
+        """Před první migrací nové verze se uloží kopie registru; další běh ji nepřepíše, drží se jen poslední 3."""
+        self.nastav(ocr=False)
+        verze = json.loads((self.t / ".obsidian/plugins/druhy-mozek/manifest.json").read_text())["version"]
+        reg_p = self.t / "_Systém/registr.json"
+        puvodni = json.dumps({"_Inbox/a.pptx": {"otisk": "0" * 64, "stav": "hotovo", "datum": "2026-01-01"}})
+        reg_p.write_text(puvodni)
+        for i in range(4):
+            (self.t / f"_Systém/registr.zaloha-0.0.{i}.json").write_text("{}")
+            os.utime(self.t / f"_Systém/registr.zaloha-0.0.{i}.json", (1000 + i, 1000 + i))
+        self.spust("_Systém/priprav.py")
+        zaloha = self.t / f"_Systém/registr.zaloha-{verze}.json"
+        self.assertEqual(zaloha.read_text(), puvodni, "kopie je z doby před migrací _Inbox")
+        self.assertNotIn("_Inbox/", reg_p.read_text())
+        self.spust("_Systém/priprav.py")
+        self.assertEqual(zaloha.read_text(), puvodni, "druhý běh kopii nepřepíše")
+        self.assertEqual(sorted(p.name for p in (self.t / "_Systém").glob("registr.zaloha-*.json")),
+                         sorted([f"registr.zaloha-{verze}.json", "registr.zaloha-0.0.2.json", "registr.zaloha-0.0.3.json"]))
 
     def test_duplicity_jsou_videt(self):
         """Stejný soubor i stejný text v jiném souboru se ukážou ve Frontě; „nechat“ pár skryje."""
@@ -729,6 +875,14 @@ else:
         self.assertIn("[due:: 2026-12-01]", text)
         self.spust("_Systém/novy_ukol.py", PREDMET, "x", "--termin", "25.10.", "--neotvirat", ocekavam_chybu=True)
         self.spust("_Systém/novy_ukol.py", "../../etc", "x", "--neotvirat", ocekavam_chybu=True)
+
+    def test_novy_ukol_bez_sablony(self):
+        """Bez šablony Wordu srozumitelná hláška místo chybového výpisu a žádný rozdělaný úkol."""
+        (self.t / "_Systém/Word/Šablona KISK.dotx").unlink()
+        r = self.spust("_Systém/novy_ukol.py", PREDMET, "Bez šablony", "--neotvirat", ocekavam_chybu=True)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertIn("Šablona KISK.dotx", r.stderr)
+        self.assertEqual(list((self.t / PREDMET).rglob("*Bez šablony*")), [])
 
     def test_prevod_do_sablony(self):
         docx(self.tmp / "prace.docx")
