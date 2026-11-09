@@ -3,6 +3,16 @@
 All notable changes to Second Brain for KISK. The newest version is at the top.
 When a new version is released, Obsidian offers it under **🆕 A new version of Second Brain is available** with a link to this list.
 
+## 1.1.4 – 2026-11-09
+
+- **Complete notes for exams** – before a material is marked as processed, its note is compared with the material: headings, definitions, tables, charts, dates, numbers, names, links and lists. With AI, a material is marked done only when the note covers everything or the AI explains why something is left out. Without AI it is marked anyway and you see how much of the material your note covers. Gaps show up under **🔍 To verify** in the queue and on Home, and the note gets the property `uplnost` (`uplna` / `k-overeni`).
+- **Large materials in chapters** – a material over about 30,000 tokens is split into chapters. The AI asks whether to process it chapter by chapter (with a token estimate), only as a summary, or skip it for now, and checks every chapter separately.
+- **No fixed limits** – concepts, flashcards and mind maps follow the material instead of fixed numbers, and the AI always reads charts and diagrams on picture slides.
+- **Nothing is lost silently** – pages and images over the OCR limit, small images on picture slides and unfinished text recognition are marked ⚠️ in the queue and listed as places to verify. Images in Word documents are now read by text recognition and the AI can see them.
+- **Assignments** – the AI writes the full brief (requirements, criteria, scope, format, deadlines) and links the assignment to its source.
+- Fixed: when macOS text recognition fails, an already processed material is no longer replaced by an empty one; it is read again next time.
+- After updating, materials waiting in the queue are read once more, so the first run of the queue can take a little longer.
+
 ## 1.1.1 – 2026-11-08
 
 - Fixed: Claude Code 2.1.309 and newer no longer shows six warnings about `Write(...)` permission rules when it starts in your vault. Newer Claude Code checks file writes only with `Edit(...)` rules, which the vault already had, so the protection of the plugin, scripts, AI rules and backup stays the same.
