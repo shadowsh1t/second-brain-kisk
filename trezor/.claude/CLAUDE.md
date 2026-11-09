@@ -59,8 +59,9 @@ Kód každého předmětu je ve vlastnosti `kod` jeho přehledu `<Předmět>/<P�
    Pole `obrazove` ve `fronta.json` jsou slajdy/strany, kde je hlavně obrázek (graf, schéma, foto); `obrazky` jsou jejich obrázky
    vybalené do cache. Podívej se na ně jen tehdy, když bez nich výpisky nedávají smysl.
 3. Nečti celý trezor. Na orientaci používej `ls` a vestavěné vyhledávání (Glob/Grep) – `find` a `rm` jsou zakázané, `mv` nepoužívej (místo něj `priprav.py --presun`). Seznam pojmů zjisti přes `ls _Pojmy`.
-4. Poznámku napiš jedním zápisem (Write) a znovu ji nečti.
-5. U položek `VELKÉ` udělej jen shrnutí + pojmy, ne detailní výpisky.
+4. Poznámku napiš jedním zápisem (Write) a znovu ji nečti. Co ukáže kontrola úplnosti, doplň přes Edit.
+5. U položek `VELKÉ` udělej jen shrnutí + pojmy, ne detailní výpisky. V kontrole úplnosti pak zbylé položky vynech
+   s důvodem „VELKÉ – jen shrnutí“ a zapiš `--k-overeni "<cesta>" "Zpracováno jen jako shrnutí (VELKÉ)"`, ať je mezera vidět.
 6. Vlastní odevzdané práce (soubory začínající UČO z `_Systém/nastaveni.json`, `HOTOVO_`, `PŘÍRUČKA`, texty úkolů psané uživatelem) nesumarizuj –
    jen je zapiš do přehledu předmětu pod „Odevzdáno“ a označ `--preskoc`. Stačí přečíst prvních ~20 řádků cache.
 7. Duplicity řeší skript sám, neotevírej je. Dvě různé verze téže přednášky (podobný název, např. `…_redesign_xxx.pptx`)
@@ -70,7 +71,7 @@ Kód každého předmětu je ve vlastnosti `kod` jeho přehledu `<Předmět>/<P�
 
 - `prednaska` – výpisky z přednášky/učiva → `<Předmět>/Poznámky/<Téma> – <KÓD>.md`
 - `ukol` – zadání úkolu s termínem → `<Předmět>/Úkoly/<N> <Název>/`, název `<ukol_prefix><název>.md` (česky `Úkol – <název>.md`).
-  Vždy s `kod` a `termin`; kroky jako zaškrtávací seznam, poslední krok `- [ ] <odevzdat> [due:: RRRR-MM-DD]`
+  Vždy s `kod`, `termin` a `zdroj: "[[<soubor zadání>]]"`; zadání zapiš úplně (požadavky, kritéria, rozsah, formát, termíny); kroky jako zaškrtávací seznam, poslední krok `- [ ] <odevzdat> [due:: RRRR-MM-DD]`
   (česky `- [ ] Odevzdat do Odevzdávárny v ISu [due:: RRRR-MM-DD]`)
   (čte to plugin **Neuro Roadmap** – Gantt, Horizon, kalendář). Zkoušku zapiš jako úkol s `typ: zkouska`.
 - `predmet` – přehled předmětu (jeden na předmět)
@@ -89,7 +90,7 @@ Datum vždy `YYYY-MM-DD`. Hodnotu s dvojtečkou dej do uvozovek (jinak se vlastn
 4. Myšlenková mapa v Mermaid (`mindmap`, max. ~20 uzlů, krátké popisky bez závorek a uvozovek)
 5. Kartičky pro Spaced Repetition: řádky `Otázka::Odpověď` pod nadpisem s tagem `#flashcards/<KÓD>`, 5–10 kusů
 6. Prázdná sekce „Moje postřehy“ pro uživatele
-7. `zdroj: "[[název originálu.pptx]]"`
+7. `zdroj: "[[název originálu.pptx]]"` (podle něj kontrola úplnosti poznámku najde; vlastnost `uplnost` doplní skript sám)
 
 Osnovy a harmonogramy nepiš jako přednášku – vytáhni z nich termíny, podmínky ukončení a témata do přehledu předmětu.
 Ukončení a kredity zapiš i do vlastností `ukonceni` a `kredity` přehledu (tabulka Předměty čte jen je), ne jen do textu.

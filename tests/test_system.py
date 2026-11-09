@@ -113,9 +113,140 @@ class Trezor(unittest.TestCase):
         fronta = json.loads((self.t / "_Systém/fronta.json").read_text())
         self.assertEqual(len(fronta), 1)  # kopie je duplicita
         self.assertIn("Ahoj světe", (self.t / fronta[0]["cache"]).read_text())
-        self.spust("_Systém/priprav.py", "--hotovo", fronta[0]["soubor"])
+        self.hotovo(fronta[0]["soubor"])
         self.spust("_Systém/priprav.py")
         self.assertEqual(json.loads((self.t / "_Systém/fronta.json").read_text()), [])
+
+    def poznamka(self, material, text, nazev=None):
+        """Poznámka k materiálu se `zdroj: "[[soubor]]"` (jak ji píše AI)."""
+        p = self.t / PREDMET / "Poznámky" / f"{nazev or Path(material).stem}.md"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(f'---\ntyp: prednaska\nzdroj: "[[{Path(material).name}]]"\n---\n\n{text}\n')
+        return p
+
+    def hotovo(self, material):
+        """Označí materiál jako hotový s poznámkou, která pokrývá celou cache (testy registru, ne úplnosti)."""
+        reg = json.loads((self.t / "_Systém/registr.json").read_text())
+        cache = self.t / f"_Systém/cache/{reg[material]['otisk'][:16]}.md"
+        self.poznamka(material, cache.read_text().split("\n", 1)[-1] if cache.exists() else "")
+        return self.spust("_Systém/priprav.py", "--hotovo", material)
+
+    def kontrola(self, material):
+        reg = json.loads((self.t / "_Systém/registr.json").read_text())
+        return json.loads((self.t / f"_Systém/kontrola/{reg[material]['otisk'][:16]}.json").read_text())
+
+    def test_hotovo_az_po_kontrole_uplnosti(self):
+        """--hotovo projde, jen když poznámka pokrývá všechny povinné položky cache, nebo je vynechání zdůvodněné."""
+        self.nastav(ocr=False)
+        bohata_pptx(self.t / PREDMET / "metadata.pptx")
+        self.spust("_Systém/priprav.py")
+        m = f"{PREDMET}/metadata.pptx"
+        stav = lambda: json.loads((self.t / "_Systém/registr.json").read_text())[m]["stav"]
+        # bez poznámky nejde označit
+        r = self.spust("_Systém/priprav.py", "--hotovo", m, ocekavam_chybu=True)
+        self.assertEqual(stav(), "ceka")
+        # poznámka bez grafu a odkazu: kontrola je vypíše, --hotovo odmítne
+        p = self.poznamka(m, "## Metadata\nDublin Core popisuje dokument.\n\n| Prvek | Popis |\n|---|---|\n| dc:title | název |\n\nZmínit historii.")
+        r = self.spust("_Systém/priprav.py", "--kontrola", m)
+        k = self.kontrola(m)
+        druhy = {x["id"]: x["druh"] for x in k["polozky"]}
+        chybi = {druhy[i] for i in k["chybi"]}
+        self.assertEqual(chybi, {"graf", "odkaz"}, k)
+        self.assertIn("Záznamy", r.stdout)
+        r = self.spust("_Systém/priprav.py", "--hotovo", m, ocekavam_chybu=True)
+        self.assertIn("Záznamy", r.stdout + r.stderr)
+        self.assertEqual(stav(), "ceka")
+        self.assertNotIn("uplnost", p.read_text())
+        # vynechání: jen známé ID a s důvodem
+        odkaz = next(i for i in k["chybi"] if druhy[i] == "odkaz")
+        self.spust("_Systém/priprav.py", "--vynech", m, "x99", "důvod", ocekavam_chybu=True)
+        self.spust("_Systém/priprav.py", "--vynech", m, odkaz, "  ", ocekavam_chybu=True)
+        self.spust("_Systém/priprav.py", "--vynech", m, odkaz, "jen ukázkový odkaz")
+        p.write_text(p.read_text() + "\n## Záznamy\n| | 2025 |\n|---|---|\n| Knihy | 120 |\n| Články | 45 |\n")
+        self.spust("_Systém/priprav.py", "--hotovo", m)
+        self.assertEqual(stav(), "hotovo")
+        self.assertIn("\nuplnost: uplna\n", p.read_text().split("---")[1] + "\n")
+        self.assertEqual(self.kontrola(m)["vynechano"], {odkaz: "jen ukázkový odkaz"})
+
+    def test_k_overeni_je_videt(self):
+        """Nejisté místo z druhého čtení → `uplnost: k-overeni` u poznámky a seznam ve Frontě."""
+        self.nastav(ocr=False)
+        pptx(self.t / PREDMET / "b.pptx", "Knihovní zákon 257/2001 Sb.")
+        self.spust("_Systém/priprav.py")
+        m = f"{PREDMET}/b.pptx"
+        p = self.poznamka(m, "Knihovní zákon 257/2001 Sb.", nazev="Zákon")
+        self.spust("_Systém/priprav.py", "--k-overeni", m, "Platí zákon i pro školní knihovny?")
+        self.spust("_Systém/priprav.py", "--hotovo", m)
+        self.assertIn("uplnost: k-overeni", p.read_text())
+        self.spust("_Systém/priprav.py")
+        fronta = (self.t / "_Systém/Fronta.md").read_text()
+        self.assertIn("[[Zákon]]", fronta)
+        self.assertIn("Platí zákon i pro školní knihovny?", fronta)
+
+    def test_kontrola_najde_cisla_data_definice(self):
+        """Strojová část: nadpisy, definice, data, čísla a výčty z cache; tvary slov a diakritika nevadí."""
+        self.nastav(ocr=False)
+        (self.t / PREDMET / "c.txt").write_text(
+            "Metadata – data o datech, která popisují dokument.\n"
+            "Termín odevzdání je 30. 11. 2026, rozsah 300 znaků.\n"
+            "Úspěšnost byla 42,5 %.\n"
+            "Druhy katalogů\n"
+            "• jmenný katalog\n• předmětový katalog\n• systematický katalog\n"
+            "Často se soustředí na\nchování uživatelů v katalogu.\n© 2026 Masarykova univerzita\n")
+        self.spust("_Systém/priprav.py")
+        m = f"{PREDMET}/c.txt"
+        self.poznamka(m, "Metadata (data o datech). Odevzdat do 2026-11-30.")
+        self.spust("_Systém/priprav.py", "--kontrola", m)
+        k = self.kontrola(m)
+        text = {x["id"]: (x["druh"], x["text"]) for x in k["polozky"]}
+        chybi = sorted(text[i] for i in k["chybi"])
+        druhy = {d for d, _ in text.values()}
+        self.assertTrue({"definice", "datum", "cislo", "vycet"} <= druhy, text)
+        self.assertNotIn(("nadpis", "Často se soustředí na"), text.values(), "zalomený řádek není nadpis")
+        self.assertFalse([t for _, t in text.values() if "©" in t], "patička se nekontroluje")
+        self.assertNotIn("definice", [d for d, _ in chybi], "definice Metadata je v poznámce")
+        self.assertNotIn("datum", [d for d, _ in chybi], "30. 11. 2026 = 2026-11-30")
+        self.assertIn("cislo", [d for d, _ in chybi])
+        self.assertIn("vycet", [d for d, _ in chybi])
+        # skloňování a bez diakritiky: „jmenného katalogu“ pokryje „jmenný katalog“
+        self.poznamka(m, "Metadata (data o datech). 2026-11-30, 300 znaků, 42,5 %.\n## Druhy katalogu\n"
+                         "- jmenneho katalogu\n- predmetovych katalogu\n- systematickeho katalogu\nChovani uzivatelu.")
+        self.spust("_Systém/priprav.py", "--kontrola", m)
+        self.assertEqual(self.kontrola(m)["chybi"], [], self.kontrola(m))
+
+    def test_kontrola_poznamky_jen_v_trezoru(self):
+        """Poznámka zadaná ručně musí být .md v trezoru mimo _Systém; zápis vlastnosti nesmí jít ven."""
+        pptx(self.t / PREDMET / "d.pptx", "Text")
+        self.nastav(ocr=False)
+        self.spust("_Systém/priprav.py")
+        m = f"{PREDMET}/d.pptx"
+        venku = self.tmp / "venku.md"
+        venku.write_text("---\ntyp: x\n---\nText\n")
+        for spatne in (str(venku), "../venku.md", "_Systém/Fronta.md", ".claude/CLAUDE.md", f"{PREDMET}/d.pptx", "neni.md"):
+            self.spust("_Systém/priprav.py", "--hotovo", m, spatne, ocekavam_chybu=True)
+        self.assertEqual(venku.read_text(), "---\ntyp: x\n---\nText\n")
+        # poznámka nalezená podle `zdroj`, která je odkazem ven, se nepoužije ani nepřepíše
+        venku.write_text('---\nzdroj: "[[d.pptx]]"\n---\nText\n')
+        (self.t / PREDMET / "Poznámky").mkdir(exist_ok=True)
+        (self.t / PREDMET / "Poznámky" / "odkaz.md").symlink_to(venku)
+        r = self.spust("_Systém/priprav.py", "--hotovo", m, ocekavam_chybu=True)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertEqual(venku.read_text(), '---\nzdroj: "[[d.pptx]]"\n---\nText\n')
+        # osnova: poznámkou je přehled předmětu (zadaný ručně); přehled vlastnost úplnosti nedostane
+        prehled = (self.t / PREDMET / f"{PREDMET}.md").read_text()
+        self.spust("_Systém/priprav.py", "--hotovo", m, f"{PREDMET}/{PREDMET}.md")
+        self.assertEqual((self.t / PREDMET / f"{PREDMET}.md").read_text(), prehled)
+
+    def test_bez_ai_hotovo_posoudi_jen_pokryti(self):
+        """Bez AI se materiál označí i s mezerami, poznámka dostane `k-overeni` a výpis řekne, že jde jen o pokrytí."""
+        self.nastav(ocr=False, ai="zadna")
+        bohata_pptx(self.t / PREDMET / "metadata.pptx")
+        self.spust("_Systém/priprav.py")
+        m = f"{PREDMET}/metadata.pptx"
+        p = self.poznamka(m, "## Metadata")
+        r = self.spust("_Systém/priprav.py", "--hotovo", m)
+        self.assertIn("uplnost: k-overeni", p.read_text())
+        self.assertIn("pokrytí", r.stdout)
 
     def nastav(self, **zmeny):
         n = json.loads((self.t / "_Systém/nastaveni.json").read_text())
@@ -152,7 +283,7 @@ class Trezor(unittest.TestCase):
         self.nastav(ocr=False)
         pptx(self.t / PREDMET / "a.pptx", "Text přednášky o knihovnách")
         self.spust("_Systém/priprav.py")
-        self.spust("_Systém/priprav.py", "--hotovo", f"{PREDMET}/a.pptx")
+        self.hotovo(f"{PREDMET}/a.pptx")
         shutil.move(str(self.t / PREDMET / "a.pptx"), str(self.t / PREDMET / "Učivo/Nový název.pptx"))
         self.spust("_Systém/priprav.py")
         reg = json.loads((self.t / "_Systém/registr.json").read_text())
@@ -203,7 +334,7 @@ class Trezor(unittest.TestCase):
         pptx(self.t / PREDMET / "b.pptx", "Nový text B")
         self.spust("_Systém/priprav.py")
         fronta = {Path(f["soubor"]).name: f for f in json.loads((self.t / "_Systém/fronta.json").read_text())}
-        self.spust("_Systém/priprav.py", "--hotovo", fronta["b.pptx"]["soubor"])
+        self.hotovo(fronta["b.pptx"]["soubor"])
         for f in fronta.values():
             (self.t / f["cache"]).write_text("<!-- zdroj: x | typ: prezentace | bloků: 1 | odstraněno opakujících se řádků: 0 -->\n\nstará\n")
         self.spust("_Systém/priprav.py")

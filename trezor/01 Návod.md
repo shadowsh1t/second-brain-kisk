@@ -94,7 +94,7 @@ Vybereš si při instalaci a **kdykoli AI přidáš, změníš nebo odebereš**:
 **Co funguje vždy, i bez AI:** Domov, fronta materiálů, termíny s odpočtem, úkoly a převod do šablony Wordu, odevzdání, Neuro Roadmap, kontrola, hlídání kódu a záloha.
 
 ### Tipy
-- **Ruční režim:** poznámku založ přes **Cmd+P → Šablony: Vložit šablonu → Přednáška**. Myšlenkovou mapu nakresli v *Canvasu* (Cmd+P → *Nové plátno*) nebo napiš jako `mindmap` v Mermaidu (vzor je v šabloně). Kartičky piš jako `Otázka::Odpověď`. Zpracovaný materiál odškrtni tlačítkem **✔️ Označit materiál jako zpracovaný**.
+- **Ruční režim:** poznámku založ přes **Cmd+P → Šablony: Vložit šablonu → Přednáška**. Myšlenkovou mapu nakresli v *Canvasu* (Cmd+P → *Nové plátno*) nebo napiš jako `mindmap` v Mermaidu (vzor je v šabloně). Kartičky piš jako `Otázka::Odpověď`. Zpracovaný materiál odškrtni tlačítkem **✔️ Označit materiál jako zpracovaný**. Když má poznámka ve vlastnosti `zdroj` odkaz na materiál (`[[soubor.pptx]]`), odškrtnutí zároveň porovná poznámku s materiálem (nadpisy, definice, tabulky, data, čísla, odkazy). Posuzuje jen pokrytí, ne kvalitu; co chybí, se ukáže ve Frontě pod „K ověření“.
 - **Nejlepší kombinace:** AI udělá kostru (shrnutí, pojmy, mapu), ty dopíšeš *Moje postřehy* – AI šetří čas, psaní tě učí.
 - **Lokální AI (soukromí, offline):** když máš model v počítači (např. přes Ollama nebo llama.cpp) a nástroj pro Terminál, který s ním umí pracovat, zadej ho jako *Vlastní příkaz*. Na dlouhá PDF bývají lokální modely slabší.
 - **Webové AI (ChatGPT, Gemini, NotebookLM):** napojit nejdou, ale můžeš jim ručně vložit text materiálu – vytažený text najdeš v `_Systém/cache`. Výsledek si vlož do poznámky ze šablony.

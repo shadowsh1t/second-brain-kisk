@@ -7,7 +7,10 @@ AI pak čte jen tenhle text, ne celé PDF nebo prezentace.
 
 Použití:
   python3 _Systém/priprav.py                 # aktualizuje cache a frontu, vypíše souhrn
-  python3 _Systém/priprav.py --hotovo CESTA  # označí soubor jako zpracovaný
+  python3 _Systém/priprav.py --hotovo CESTA [POZNÁMKA]  # označí soubor jako zpracovaný (jen po úplné kontrole)
+  python3 _Systém/priprav.py --kontrola CESTA [POZNÁMKA]  # kontrola úplnosti poznámky proti cache
+  python3 _Systém/priprav.py --vynech CESTA ID[,ID] DŮVOD  # položka kontroly záměrně v poznámce není
+  python3 _Systém/priprav.py --k-overeni CESTA TEXT  # nejisté místo z druhého čtení (ukáže se ve Frontě)
   python3 _Systém/priprav.py --preskoc CESTA # označí soubor jako přeskočený (vlastní práce, osnova…)
   python3 _Systém/priprav.py --presun SOUBOR PŘEDMĚT [NÁZEV]  # zařadí soubor do <Předmět>/Učivo
   python3 _Systém/priprav.py --pridej-ukol SOUBOR PŘEDMĚT NÁZEV [TERMÍN]  # úkol z nalezeného zadání
@@ -78,6 +81,18 @@ OCR_MAX_OBRAZKU = 10  # obrázků z jedné prezentace
 OCR_MIN_VELIKOST = 20_000  # menší obrázky (loga, ikony) se nečtou
 OBRAZKY_OCR = {".png", ".jpg", ".jpeg", ".gif", ".tif", ".tiff", ".bmp", ".heic", ".webp"}
 ZACATEK = time.monotonic()
+KONTROLA = SYS / "kontrola"  # výsledky kontroly úplnosti, jeden soubor na materiál (<otisk>.json)
+KONTROLA_VERZE = 1
+NEVYZNAMNA = set("pro jak ale nebo jsou byl byla bylo byli jeho jeji ktery ktera ktere kteri tak jako pri pod nad mezi take tez pak jen "
+                 "neni bude budou jiz uz the and for with that this from are was were".split())
+ODRAZKA = re.compile(r"^(?:[•▪◦‣∙·*\-–—]|\d{1,2}[.)]|[a-z][)])\s+")
+CISLO = re.compile(r"(?<![\w.,])\d+(?:[  ]\d{3})*(?:[.,]\d+)?(?![\w])")
+URL = re.compile(r"https?://[^\s|<>\"')\]]+")
+ISO_DATUM = re.compile(r"\b((?:19|20)\d\d)-(\d{1,2})-(\d{1,2})\b")
+K_DATUM = re.compile(r"\b(\d{1,2})\.\s*(\d{1,2})\.\s*((?:19|20)\d\d)\b")  # jako DATUM, ale i minulé století (zákony)
+K_DATUM_SLOVEM = re.compile(r"\b(\d{1,2})\.\s*(" + "|".join(MESICE) + r")(?:\s+((?:19|20)\d\d))?", re.I)
+VYNECH_MAX = 300  # znaků důvodu vynechání nebo místa k ověření
+K_OVERENI_MAX = 50  # míst k ověření u jednoho materiálu
 
 # Text z PDF (PDFKit) a rozpoznání textu v obrázcích (macOS Vision) – lokálně, bez AI a bez internetu.
 # „pdf“: [{t: text, o: 0 bez OCR | 1 OCR | 2 došel čas | 3 nad limit stran}], „obrazky“: [text | null = došel čas]
@@ -511,15 +526,401 @@ def materialy():
             yield p, nfc(str(rel))
 
 
-def oznac(cesta, stav):
-    reg = nacti_registr()
+def soubor_v_trezoru(cesta):
     koren, p = TREZOR.resolve(), (TREZOR / cesta).resolve()  # absolutní cesta TREZOR nahradí
     if not cesta.strip() or not p.is_relative_to(koren) or not p.is_file():  # složka, prázdná nebo cesta ven
         sys.exit(f"Soubor v trezoru neexistuje: {cesta!r}")
-    rel = nfc(str(p.relative_to(koren)))
+    return p, nfc(str(p.relative_to(koren)))
+
+
+def je_bez_ai():
+    try:
+        return json.loads(NASTAVENI.read_text()).get("ai") == "zadna"
+    except Exception:
+        return False
+
+
+def oznac(cesta, stav, poznamka=None):
+    p, rel = soubor_v_trezoru(cesta)
+    if stav == "hotovo":
+        T = texty()
+        data, pozn = kontroluj(p, rel, poznamka)
+        bez_ai = je_bez_ai()
+        if data["chybi"] and not bez_ai:
+            sys.exit(T["kontrola_neoznaceno"].format(c=len(data["chybi"])))
+        if pozn and frontmatter(pozn).get("typ") != "predmet":  # přehled předmětu (osnova) vlastnost nedostane
+            nastav_vlastnost(pozn, "uplnost", "k-overeni" if data["chybi"] or data["k_overeni"] else "uplna")
+    reg = nacti_registr()
     reg[rel] = {"otisk": otisk(p), "stav": stav, "datum": date.today().isoformat(), **podpis(p)}
     uloz_registr(reg)
     print(f"{stav}: {rel}")
+
+
+# ---------- Kontrola úplnosti ----------
+# Skript z cache sestaví povinné položky (nadpisy, definice, tabulky, grafy, data, čísla, jména, odkazy, výčty)
+# a ověří, že se v poznámce opravdu vyskytují. Co chybí, musí AI doplnit, nebo vynechání zdůvodnit (--vynech).
+# Důležitost posoudit neumí – proto druhé čtení AI a místa „k ověření“.
+
+def bez_diakritiky(s):
+    return "".join(c for c in unicodedata.normalize("NFD", s) if not unicodedata.combining(c)).lower()
+
+
+def klic_slova(w):
+    """Kmen pro porovnání: skloňování mění konec slova (katalog/katalogu, cíl/cíle)."""
+    return w[:4] if len(w) >= 5 else w[:3]
+
+
+def klice(text):
+    return [klic_slova(w) for w in re.findall(r"[^\W\d_]+", bez_diakritiky(text)) if len(w) >= 3 and w not in NEVYZNAMNA]
+
+
+def data_v(text):
+    """Data v textu jako „RRRR-MM-DD“ (bez roku „-MM-DD“): 30. 11. 2026, 30. listopadu 2026 i 2026-11-30."""
+    vysledek = set()
+    for d, m, r in K_DATUM.findall(text):
+        vysledek.add(f"{r}-{int(m):02}-{int(d):02}")
+    for d, m, r in K_DATUM_SLOVEM.findall(text):
+        vysledek.add(f"{r}-{MESICE[m.lower()]:02}-{int(d):02}")
+    for r, m, d in ISO_DATUM.findall(text):
+        vysledek.add(f"{r}-{int(m):02}-{int(d):02}")
+    return vysledek
+
+
+def bez_dat(text):
+    for vzor in (K_DATUM, K_DATUM_SLOVEM, ISO_DATUM):
+        text = vzor.sub(" ", text)
+    return text
+
+
+def cisla_v(text):
+    return {re.sub(r"[  ]", "", c).replace(",", ".") for c in CISLO.findall(bez_dat(text))}
+
+
+def ciste_url(u):
+    return re.sub(r"^https?://(www\.)?", "", u.strip().lower()).rstrip("/.,;")
+
+
+def jmena_v(radek):
+    """Víceslovná jména uprostřed věty (Jan Novák, Dublin Core); první slovo věty se nepočítá."""
+    slova = list(re.finditer(r"[^\W\d_]+|[.!?:;]", radek))
+    vysledek, rada = [], []
+    for i, m in enumerate(slova):
+        w = m.group(0)
+        zacatek_vety = i == 0 or slova[i - 1].group(0) in ".!?:;"
+        if len(w) > 1 and w[0].isupper() and w[1:].islower() and (rada or not zacatek_vety):
+            rada.append(w)
+            continue
+        if len(rada) >= 2:
+            vysledek.append(" ".join(rada))
+        rada = []
+    if len(rada) >= 2:
+        vysledek.append(" ".join(rada))
+    return vysledek
+
+
+def polozky_kontroly(text, typ):
+    """Povinné položky z textu cache. Každá má id, druh, text, kde a podklady pro porovnání (k, c, d, u, podil)."""
+    polozky, videne, pocty = [], set(), Counter()
+    kde = ""
+
+    def pridej(druh, popis, podil=1.0, **podklad):
+        popis = re.sub(r"\s+", " ", popis).strip()
+        if not any(podklad.values()):
+            return
+        podklad = {k: sorted(v) for k, v in podklad.items() if v}
+        znacka = (druh, json.dumps(podklad, sort_keys=True, ensure_ascii=False))
+        if znacka in videne:
+            return
+        videne.add(znacka)
+        pocty[druh] += 1
+        predpona = {"nadpis": "n", "definice": "d", "tabulka": "t", "graf": "g", "datum": "dt", "cislo": "c",
+                    "jmeno": "j", "odkaz": "o", "vycet": "v"}[druh]
+        polozky.append({"id": f"{predpona}{pocty[druh]}", "druh": druh, "text": popis[:90], "kde": kde, "podil": podil,
+                        **podklad})
+
+    def tabulka(radky, nazev=""):
+        bunky = [b.strip().replace("\\|", "|") for r in radky if not re.fullmatch(r"\|[-|: ]*\|", r)
+                 for b in re.split(r"(?<!\\)\|", r.strip().strip("|"))]
+        slova = {k[0] for b in bunky if (k := klice(b))}
+        cisla = set().union(*(cisla_v(b) for b in bunky)) if bunky else set()
+        return slova | set(klice(nazev)), cisla
+
+    radky = text.splitlines()
+    i = 0
+    vycet = []
+
+    def uzavri_vycet():
+        if len(vycet) >= 3:
+            kmeny = [max(k, key=len) for r in vycet if (k := klice(r))]
+            pridej("vycet", "; ".join(vycet[:3]) + (" …" if len(vycet) > 3 else ""), 0.6, k=kmeny)
+        vycet.clear()
+
+    while i < len(radky):
+        r = radky[i].strip()
+        dalsi = next((x.strip() for x in radky[i + 1:] if x.strip()), "")
+        i += 1
+        if not r:
+            continue
+        hlava = re.fullmatch(r"=== (slajd|strana) (\d+)(?:: (.*))? ===", r)
+        if hlava:
+            uzavri_vycet()
+            kde = f"{hlava.group(1)} {hlava.group(2)}"
+            if hlava.group(3):
+                pridej("nadpis", hlava.group(3), 0.5, k=set(klice(hlava.group(3))))
+            continue
+        if r.startswith("[graf"):
+            uzavri_vycet()
+            nazev = r[len("[graf"):].strip(" :]")
+            tab = []
+            while i < len(radky) and radky[i].strip().startswith("|"):
+                tab.append(radky[i].strip())
+                i += 1
+            slova, cisla = tabulka(tab, nazev)
+            pridej("graf", nazev or (tab[0] if tab else "graf"), 0.5, k=slova, c=cisla)
+            continue
+        if r.startswith("|"):
+            uzavri_vycet()
+            tab = [r]
+            while i < len(radky) and radky[i].strip().startswith("|"):
+                tab.append(radky[i].strip())
+                i += 1
+            slova, cisla = tabulka(tab)
+            pridej("tabulka", tab[0].strip("| "), 0.5, k=slova, c=cisla)
+            continue
+        for u in URL.findall(r):
+            pridej("odkaz", u, u={ciste_url(u)})
+        if r.startswith("[odkazy]"):
+            continue
+        if re.fullmatch(r"\[[^\]]+\]", r) or "©" in r:  # značky jako [poznámky řečníka], patička s copyrightem
+            continue
+        nadpis_md = re.match(r"#{1,6}\s+(.*)", r)
+        if nadpis_md:
+            uzavri_vycet()
+            pridej("nadpis", nadpis_md.group(1), 0.5, k=set(klice(nadpis_md.group(1))))
+            continue
+        odrazka = ODRAZKA.match(r) or (r[:2] == "o " and r[2:3].isupper())
+        obsah = r[odrazka.end():] if hasattr(odrazka, "end") else r[2:] if odrazka else r
+        if odrazka:
+            vycet.append(obsah)
+        else:
+            uzavri_vycet()
+            # nadpis bez značky (PDF, prostý text): krátký řádek bez interpunkce na konci, za ním další text
+            # zalomený řádek sloupce pokračuje malým písmenem; „X – …“ je začátek definice, ne nadpis
+            if (typ in ("pdf", "text", "obrázek") and dalsi and 2 <= len(r) <= 60 and len(r.split()) <= 7 and r[0].isupper()
+                    and not re.search(r"[.,:;!?]$|,|\s[–—-]\s|:\s", r) and not dalsi[0].islower() and klice(r)):
+                pridej("nadpis", r, 0.5, k=set(klice(r)))
+                continue
+        definice = re.match(r"([^\W\d_][^:–—=]{1,48}?)\s*(?:\s[–—=-]\s|:\s)\s*\S", obsah)
+        zalomeno = typ in ("pdf", "text", "obrázek") and not obsah[0].isupper()  # pokračování zalomené věty, ne definice
+        if definice and not zalomeno and len(definice.group(1).split()) <= 5 and "//" not in definice.group(1):
+            pridej("definice", obsah, k=set(klice(definice.group(1))))
+        for d in data_v(obsah):
+            pridej("datum", d, d={d})
+        for c in cisla_v(obsah):
+            cele = c.split(".")[0]
+            if len(cele) >= 2 or "." in c or re.search(re.escape(c.replace(".", ",")) + r"\s?%", obsah):
+                pridej("cislo", c + "  ← " + obsah[:70], c={c})
+        for j in jmena_v(obsah):
+            prijmeni = re.findall(r"[^\W\d_]+", bez_diakritiky(j))[-1]  # jména se skloňují víc (Čapek/Čapka)
+            pridej("jmeno", j, k={prijmeni[:min(4, max(3, len(prijmeni) - 2))]})
+    uzavri_vycet()
+    return polozky
+
+
+def je_pokryta(polozka, slova, cisla, data, text):
+    if "u" in polozka:
+        return all(u in text for u in polozka["u"])
+    if "d" in polozka:  # „-MM-DD“ = datum bez roku, stačí shoda dne a měsíce
+        return all(any(x.endswith(d) for x in data) if d.startswith("-") else d in data for d in polozka["d"])
+    vsechny = [("k", k) for k in polozka.get("k", [])] + [("c", c) for c in polozka.get("c", [])]
+    if not vsechny:
+        return True
+    nalezeno = sum(1 for druh, v in vsechny if (v in slova if druh == "k" else v in cisla))
+    return nalezeno >= max(1, polozka["podil"] * len(vsechny) - 1e-9)
+
+
+def odkazy_zdroju(p):
+    """Názvy souborů z vlastností `zdroj` a `zdroje` poznámky (jeden odkaz i seznam)."""
+    text = p.read_text(errors="ignore")
+    if not text.startswith("---") or text.count("---") < 2:
+        return set()
+    nazvy, klic = set(), None
+    for radek in text.split("---", 2)[1].splitlines():
+        m = re.match(r"([\w]+):", radek)
+        if m:
+            klic = m.group(1)
+        if klic in ("zdroj", "zdroje"):
+            for odkaz in re.findall(r"\[\[([^\]|#]+)", radek):
+                nazvy.add(nfc(odkaz.strip().rsplit("/", 1)[-1]))
+    return nazvy
+
+
+def najdi_poznamku(rel, zadana):
+    T = texty()
+    if zadana is not None:
+        koren, p = TREZOR.resolve(), (TREZOR / zadana).resolve()
+        if (not zadana.strip() or not p.is_relative_to(koren) or p.suffix.lower() != ".md" or not p.is_file()
+                or p.relative_to(koren).parts[0] in VYNECHAT - {"_Pojmy", "_Přehledy", "_Zdroje", "Poznámky"} | {".druhy-mozek-zaloha"}):
+            sys.exit(T["kontrola_spatna_poznamka"].format(p=zadana))
+        return p
+    jmeno = nfc(Path(rel).name)
+    hledam = {jmeno, nfc(Path(rel).stem)}
+    koren = TREZOR.resolve()
+    nalezene = [(p, r) for p, r in poznamky() if p.resolve().is_relative_to(koren) and odkazy_zdroju(p) & hledam]  # odkaz ven ne
+    if len(nalezene) > 1:  # stejný název souboru ve víc předmětech → přednost má stejný předmět
+        stejny = [x for x in nalezene if x[1].split("/")[0] == rel.split("/")[0]]
+        nalezene = stejny if stejny else nalezene
+    if not nalezene:
+        return None
+    if len(nalezene) > 1:
+        sys.exit(T["kontrola_vic_poznamek"].format(n=jmeno, s=", ".join(r for _, r in nalezene), m=rel))
+    return nalezene[0][0]
+
+
+def k_overeni_hotovych(reg, T):
+    """Hotové materiály s místy k ověření: [(poznámka, zdroj, místa)]. Kontroly smazaných a změněných materiálů zahodí."""
+    if not KONTROLA.is_dir():
+        return []
+    platne = {v["otisk"][:16]: k for k, v in reg.items()}
+    vysledek = []
+    for f in sorted(KONTROLA.glob("*.json")):
+        if f.stem not in platne:
+            f.unlink()
+            continue
+        try:
+            data = json.loads(f.read_text())
+        except Exception:
+            continue
+        rel = platne[f.stem]
+        if not isinstance(data, dict) or reg[rel]["stav"] != "hotovo":
+            continue
+        podle_id = {x["id"]: x for x in data.get("polozky") or [] if isinstance(x, dict) and "id" in x}
+        mista = [str(m) for m in data.get("k_overeni") or []] + \
+                [f"{T.get('druh_' + str(podle_id[i].get('druh')), '')}: {podle_id[i].get('text', '')}"
+                 for i in data.get("chybi") or [] if i in podle_id]
+        if mista:
+            pozn = Path(str(data.get("poznamka") or rel)).stem
+            vysledek.append((re.sub(r"[\[\]|\x00-\x1f]", " ", pozn), Path(rel).name,
+                             [html.escape(re.sub(r"[\x00-\x1f]", " ", m), quote=False) for m in mista]))
+    return vysledek
+
+
+def soubor_kontroly(p):
+    return KONTROLA / f"{otisk(p)[:16]}.json"
+
+
+def nacti_kontrolu(p):
+    try:
+        data = json.loads(soubor_kontroly(p).read_text())
+        return data if isinstance(data, dict) and data.get("verze") == KONTROLA_VERZE else None
+    except Exception:
+        return None
+
+
+def kontroluj(p, rel, zadana=None, tisk=True):
+    """Porovná položky cache s poznámkou, výsledek uloží a vypíše. Vrátí (data, poznámka nebo None)."""
+    T = texty()
+    h = otisk(p)
+    cache = CACHE / f"{h[:16]}.md"
+    pozn = najdi_poznamku(rel, zadana)
+    bez_ai = je_bez_ai()
+    if pozn is None and not bez_ai:
+        sys.exit(T["kontrola_chybi_poznamka"].format(n=Path(rel).name, m=rel))
+    if pozn is None:  # bez AI a bez poznámky (zpracováno jinde, třeba na papíře) – není co porovnat
+        return {"chybi": [], "k_overeni": []}, None
+    if cache.exists():
+        obsah = cache.read_text(errors="ignore")
+        typ = (re.search(r"\| typ: ([^|]+)", obsah.split("\n", 1)[0]) or [None, ""])[1].strip()
+        polozky = polozky_kontroly(obsah.split("\n", 1)[-1], typ)
+    else:
+        polozky = []
+    stara = nacti_kontrolu(p) or {}
+    ids = {x["id"] for x in polozky}
+    data = {"verze": KONTROLA_VERZE, "zdroj": rel, "otisk": h, "datum": date.today().isoformat(),
+            "poznamka": nfc(str(pozn.resolve().relative_to(TREZOR.resolve()))) if pozn else None,
+            "polozky": polozky, "pokryto": [], "chybi": [],
+            "vynechano": {k: v for k, v in (stara.get("vynechano") or {}).items() if k in ids},
+            "k_overeni": list(stara.get("k_overeni") or [])}
+    if pozn:
+        text = pozn.read_text(errors="ignore")
+        if text.startswith("---") and text.count("---") >= 2:
+            text = text.split("---", 2)[2]
+        slova = set(klice(text))
+        slova |= {k[:3] for k in slova}  # krátké kmeny (jména, slova do 4 písmen) stačí na začátek slova
+        cisla, dat = cisla_v(text), data_v(text)
+        nizko = text.lower()
+        for x in polozky:
+            pokryta = je_pokryta(x, slova, cisla, dat, nizko)
+            data["pokryto" if pokryta else "chybi"].append(x["id"])
+        data["chybi"] = [i for i in data["chybi"] if i not in data["vynechano"]]
+    KONTROLA.mkdir(parents=True, exist_ok=True)
+    soubor_kontroly(p).write_text(json.dumps(data, ensure_ascii=False, indent=1))
+    if tisk:
+        print(T["kontrola_vysledek"].format(m=rel, p=data["poznamka"] or "—", a=len(data["pokryto"]), b=len(polozky),
+                                            v=len(data["vynechano"]), c=len(data["chybi"]), k=len(data["k_overeni"])))
+        if not cache.exists():
+            print(T["kontrola_bez_cache"])
+        podle_id = {x["id"]: x for x in polozky}
+        for i in data["chybi"]:
+            x = podle_id[i]
+            print(T["kontrola_polozka"].format(id=i, druh=T.get("druh_" + x["druh"], x["druh"]), text=x["text"],
+                                               kde=f" ({x['kde']})" if x["kde"] else ""))
+        if data["chybi"] and not bez_ai:  # bez AI uživatel příkazy nepíše, výsledek mu ukáže rozšíření
+            print(T["kontrola_rada"].format(m=rel))
+        if bez_ai:
+            print(T["kontrola_bez_ai"])
+    return data, pozn
+
+
+def vynech(cesta, ids, duvod):
+    T = texty()
+    p, rel = soubor_v_trezoru(cesta)
+    data = nacti_kontrolu(p)
+    if not data:
+        sys.exit(T["kontrola_nejdriv"].format(m=rel))
+    duvod = re.sub(r"[\x00-\x1f\x7f]+", " ", duvod).strip()[:VYNECH_MAX]
+    if not duvod:
+        sys.exit(T["kontrola_duvod"])
+    vybrane = [i.strip() for i in ids.split(",") if i.strip()]
+    nezname = [i for i in vybrane if i not in {x["id"] for x in data["polozky"]}]
+    if nezname or not vybrane:
+        sys.exit(T["kontrola_nezname_id"].format(s=", ".join(nezname) or "—"))
+    data["vynechano"].update({i: duvod for i in vybrane})
+    data["chybi"] = [i for i in data["chybi"] if i not in data["vynechano"]]
+    soubor_kontroly(p).write_text(json.dumps(data, ensure_ascii=False, indent=1))
+    print(T["kontrola_vynechano"].format(s=", ".join(vybrane)))
+
+
+def pridej_k_overeni(cesta, text):
+    T = texty()
+    p, rel = soubor_v_trezoru(cesta)
+    data = nacti_kontrolu(p) or {"verze": KONTROLA_VERZE, "zdroj": rel, "otisk": otisk(p), "polozky": [], "pokryto": [],
+                                 "chybi": [], "vynechano": {}, "k_overeni": [], "poznamka": None}
+    text = re.sub(r"[\x00-\x1f\x7f]+", " ", text).strip()[:VYNECH_MAX]
+    if not text:
+        sys.exit(T["kontrola_text_prazdny"])
+    if text not in data["k_overeni"]:
+        data["k_overeni"] = (data["k_overeni"] + [text])[-K_OVERENI_MAX:]
+    KONTROLA.mkdir(parents=True, exist_ok=True)
+    soubor_kontroly(p).write_text(json.dumps(data, ensure_ascii=False, indent=1))
+    print(T["kontrola_k_overeni"].format(n=len(data["k_overeni"]), s=text))
+
+
+def nastav_vlastnost(p, klic, hodnota):
+    """Nastaví jednu vlastnost ve frontmatteru, zbytek poznámky nechá beze změny."""
+    text = p.read_text(errors="ignore")
+    radek = f"{klic}: {hodnota}"
+    if text.startswith("---\n") and "\n---" in text[3:]:
+        konec = text.index("\n---", 3)
+        blok = text[4:konec]
+        if re.search(rf"^{klic}:.*$", blok, re.M):
+            blok = re.sub(rf"^{klic}:.*$", radek, blok, count=1, flags=re.M)
+        else:
+            blok = (blok + "\n" if blok else "") + radek
+        text = "---\n" + blok + text[konec:]
+    else:
+        text = f"---\n{radek}\n---\n\n" + text
+    p.write_text(text)
 
 
 def ciste_jmeno(rel):
@@ -701,6 +1102,7 @@ def prehled():
     pozn_preklad = {"SKEN (OCR)": T["pozn_sken_ocr"], "SKEN": T["pozn_sken"], "VELKÉ": T["pozn_velke"],
                     "AI přečte": T["pozn_obrazek"], "OCR": T["pozn_ocr"]}
     preloz = lambda text: next((v for k, v in pozn_preklad.items() if text.startswith(k)), text)
+    k_overeni = k_overeni_hotovych(reg, T)
     radky = [
         f"# {T['fronta_nadpis']}", "",
         f"## {T['souhrn']}",
@@ -711,6 +1113,7 @@ def prehled():
         *([T["rada_sezeni"], ""] if davek > 1 and not bez_ai else []),
         f'<progress value="{vyrizeno}" max="{max(celkem, 1)}"></progress> ' + T["zpracovano"].format(a=vyrizeno, b=celkem),
         "",
+        *([T["k_overeni_souhrn"].format(n=len(k_overeni), h=T["k_overeni_nadpis"]), ""] if k_overeni else []),
         f"## {T['seznam']}",
         T["aktualizovano"].format(d=date.today().isoformat()), "",
     ]
@@ -726,6 +1129,11 @@ def prehled():
         for d in duplicity:
             druh = T["duplicity_stejne"] if d["typ"] == "stejne" else T["duplicity_podobne"].format(s=d["shoda"])
             radky.append(f"- {ciste_jmeno(d['a'])} ↔ {ciste_jmeno(d['b'])} ({druh})")
+    if k_overeni:
+        radky += ["", f"## {T['k_overeni_nadpis']}", T["k_overeni_rada"], ""]
+        for pozn, zdroj, mista in k_overeni:
+            dalsich = T["k_overeni_dalsich"].format(n=len(mista) - 5) if len(mista) > 5 else ""
+            radky.append(f"- [[{pozn}]] ({zdroj.replace('|', '/')}): " + "; ".join(m.replace("|", "/") for m in mista[:5]) + dalsich)
     FRONTA.write_text("\n".join(radky) + "\n")
     (SYS / "fronta.json").write_text(json.dumps(fronta, ensure_ascii=False, indent=1))
 
@@ -1029,8 +1437,16 @@ if __name__ == "__main__":
     zamek = open(ZAMEK, "w")
     fcntl.flock(zamek, fcntl.LOCK_EX)
     migruj_inbox()
-    if len(sys.argv) == 3 and sys.argv[1] in ("--hotovo", "--preskoc"):
-        oznac(sys.argv[2], "hotovo" if sys.argv[1] == "--hotovo" else "preskoceno")
+    if len(sys.argv) in (3, 4) and sys.argv[1] == "--hotovo":
+        oznac(sys.argv[2], "hotovo", sys.argv[3] if len(sys.argv) == 4 else None)
+    elif len(sys.argv) == 3 and sys.argv[1] == "--preskoc":
+        oznac(sys.argv[2], "preskoceno")
+    elif len(sys.argv) in (3, 4) and sys.argv[1] == "--kontrola":
+        kontroluj(*soubor_v_trezoru(sys.argv[2]), sys.argv[3] if len(sys.argv) == 4 else None)
+    elif len(sys.argv) == 5 and sys.argv[1] == "--vynech":
+        vynech(*sys.argv[2:])
+    elif len(sys.argv) == 4 and sys.argv[1] == "--k-overeni":
+        pridej_k_overeni(*sys.argv[2:])
     elif len(sys.argv) in (4, 5) and sys.argv[1] == "--presun":
         presun(*sys.argv[2:])
     elif len(sys.argv) in (5, 6) and sys.argv[1] == "--pridej-ukol":

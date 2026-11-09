@@ -2494,9 +2494,11 @@ class MaterialVyber extends FuzzySuggestModal {
   async onChooseItem(m) {
     if (this.poVyberu) return this.poVyberu(m);
     try {
-      await this.plugin.spustPython("priprav.py", ["--hotovo", m.soubor]);
+      const vystup = await this.plugin.spustPython("priprav.py", ["--hotovo", m.soubor]);
       await this.plugin.spustPython("priprav.py", []);
-      new Notice(T("✔️ Označeno jako zpracované: {0}", m.soubor));
+      // výsledek kontroly úplnosti (pokryto / chybí, „jen pokrytí“) bez jednotlivých položek a bez řádku „hotovo: …“
+      const kontrola = vystup.split("\n").filter((r) => r.trim() && !r.startsWith("  ✗") && !r.startsWith("hotovo: ")).join("\n");
+      new Notice(T("✔️ Označeno jako zpracované: {0}", m.soubor) + (kontrola ? "\n" + kontrola : ""), kontrola ? 15000 : undefined);
     } catch (e) {
       this.plugin.chyba(T("Nepodařilo se označit: {0}", e.message), "rucne-hotovo");
     }
