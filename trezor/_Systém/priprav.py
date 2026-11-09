@@ -8,7 +8,7 @@ AI pak čte jen tenhle text, ne celé PDF nebo prezentace.
 Použití:
   python3 _Systém/priprav.py                 # aktualizuje cache a frontu, vypíše souhrn
   python3 _Systém/priprav.py --hotovo CESTA [POZNÁMKA]  # označí soubor jako zpracovaný (jen po úplné kontrole)
-  python3 _Systém/priprav.py --kontrola CESTA [POZNÁMKA]  # kontrola úplnosti poznámky proti cache
+  python3 _Systém/priprav.py --kontrola CESTA [POZNÁMKA] [--kapitola N]  # kontrola úplnosti (celá, nebo jedna kapitola)
   python3 _Systém/priprav.py --vynech CESTA ID[,ID] DŮVOD  # položka kontroly záměrně v poznámce není
   python3 _Systém/priprav.py --k-overeni CESTA TEXT  # nejisté místo z druhého čtení (ukáže se ve Frontě)
   python3 _Systém/priprav.py --preskoc CESTA # označí soubor jako přeskočený (vlastní práce, osnova…)
@@ -49,7 +49,8 @@ FRONTA = SYS / "Fronta.md"
 TEXTOVE = {".pdf", ".pptx", ".docx", ".doc", ".rtf", ".txt", ".webloc"}
 OBRAZKY = {".png", ".jpg", ".jpeg", ".heic", ".webp"}
 VYNECHAT = {"_Systém", "_Pojmy", "_Přehledy", "_Zdroje", "_Archiv", "Poznámky", ".obsidian", ".claude", ".trash"}
-VELKE = 30_000  # odhad tokenů, od kterého se soubor zpracuje jen jako shrnutí
+VELKE = 30_000  # odhad tokenů, od kterého se materiál dělí na kapitoly (AI se zeptá, jak ho zpracovat)
+KAPITOLA = 15_000  # tokenů nejvýš na jednu kapitolu velkého materiálu
 DAVKA = 8  # položek na jedno /zpracuj (stejné číslo je v .claude/commands/zpracuj.md)
 VYSTUP = 4_000  # odhad tokenů na napsání poznámky, pojmů a kartiček k jedné položce
 MAX_CAST = 50_000_000  # max. velikost jedné rozbalené části pptx/docx (ochrana proti zip bombě)
@@ -73,7 +74,7 @@ except Exception:  # chybějící nebo poškozené nastavení – skripty běž�
     _UCO = ""
 VLASTNI_PREFIX = _UCO + "-" if _UCO else None
 ZAMEK = SYS / ".priprav.lock"
-CACHE_VERZE = 2  # při změně extrakce zvýšit – čekající položky se přegenerují, hotové ne
+CACHE_VERZE = 3  # při změně extrakce zvýšit – čekající položky se přegenerují, hotové ne
 MALO_TEXTU = 80  # znaků: slajd/strana s menším množstvím textu je „hlavně obrázek“
 OCR_ROZPOCET = 150  # s na jeden běh (Obsidian čeká na skript max. 5 min); zbytek se dočte příště
 OCR_MAX_STRAN = 60  # stran jednoho PDF
@@ -332,14 +333,18 @@ def z_pptx(cesta, info, slozka):
                 info["obrazove"].append(i)
                 for rid in re.findall(r'<a:blip\b[^>]*\br:embed="([^"]+)"', xml):
                     cil = rel.get(rid, ("", "", True))[1]
-                    if cil in jmena and posixpath.splitext(cil)[1].lower() in OBRAZKY_OCR \
-                            and OCR_MIN_VELIKOST <= z.getinfo(cil).file_size <= MAX_CAST:
-                        kandidati.append((len(bloky), i, cil))
+                    if cil in jmena and posixpath.splitext(cil)[1].lower() in OBRAZKY_OCR and z.getinfo(cil).file_size <= MAX_CAST:
+                        if z.getinfo(cil).file_size >= OCR_MIN_VELIKOST:
+                            kandidati.append((len(bloky), i, cil))
+                        else:  # malý obrázek na obrazovém slajdu: nečte se, ale nesmí zmizet potichu
+                            info["neprecteno"].setdefault("male", []).append(i)
             hlava = f"=== slajd {i}: {nadpis} ===" if nadpis else f"=== slajd {i} ==="
             bloky.append(hlava + "\n" + "\n".join(radky))
         # obrázky slajdů „hlavně obrázek“ vybalit do cache (AI se na ně může podívat) a přečíst z nich text
         vybrane, videne = [], set()
         for b, i, cil in kandidati:
+            if cil not in videne and len(vybrane) >= OCR_MAX_OBRAZKU:
+                info["neprecteno"].setdefault("limit_obrazku", []).append(i)
             if cil not in videne and len(vybrane) < OCR_MAX_OBRAZKU:
                 videne.add(cil)
                 slozka.mkdir(parents=True, exist_ok=True)
@@ -361,6 +366,26 @@ def z_docx(cesta, info, slozka):
         xml = precti_cast(z, "word/document.xml")
         rel = vztahy(z, "word/document.xml")
         grafy = [r for rid in re.findall(r'<c:chart\b[^>]*\br:id="([^"]+)"', xml) if rid in rel for r in graf(z, rel[rid][1])]
+        # obrázky (grafy, schémata ve Wordu): vybalit do cache pro AI a přečíst OCR; loga a ikony (malé) ne
+        media = sorted((n for n in z.infolist() if n.filename.startswith("word/media/") and OCR_MIN_VELIKOST <= n.file_size <= MAX_CAST
+                        and posixpath.splitext(n.filename)[1].lower() in OBRAZKY_OCR),
+                       key=lambda n: [int(c) if c.isdigit() else c for c in re.split(r"(\d+)", n.filename)])
+        if len(media) > OCR_MAX_OBRAZKU:
+            info["neprecteno"]["obrazky_dokumentu"] = [len(media) - OCR_MAX_OBRAZKU]
+        vybrane = []
+        for n in media[:OCR_MAX_OBRAZKU]:
+            slozka.mkdir(parents=True, exist_ok=True)
+            soubor = slozka / f"obrazek{len(vybrane) + 1}{posixpath.splitext(n.filename)[1].lower()}"
+            soubor.write_bytes(z.read(n.filename))
+            vybrane.append(soubor)
+    texty_obrazku = []
+    for soubor, text in zip(vybrane, ocr_obrazku(vybrane)):
+        info["obrazky"].append(soubor)
+        if text is None:
+            info["odlozeno"] = True
+        elif len(re.sub(r"\s", "", text)) >= 10:
+            texty_obrazku += ["[text z obrázku]", text]
+            info["ocr"] += 1
     radky = []
     for kus, je_tabulka in docx_kusy(xml):
         if je_tabulka:
@@ -372,7 +397,7 @@ def z_docx(cesta, info, slozka):
                 continue
             styl = re.search(r'<w:pStyle w:val="(?:Heading|Nadpis)(\d)"', p)
             radky.append(("#" * int(styl.group(1)) + " " if styl else "") + text)
-    return ["\n".join([r for r in radky if r] + grafy + odkazy(rel))]
+    return ["\n".join([r for r in radky if r] + grafy + texty_obrazku + odkazy(rel))]
 
 
 def zbyva_ocr():
@@ -385,6 +410,10 @@ def ocr_zapnuto():
 
 def ocr_jazyky():
     return ",".join(OCR_JAZYKY.get(nastaveni().get("jazyk"), OCR_JAZYKY["cs"]))
+
+
+class OcrNedostupne(Exception):
+    """Text z PDF ani OCR teď přečíst nejde (osascript nefunguje) – cache se nepřepíše, zkusí se příště."""
 
 
 def osascript(argumenty, cas):
@@ -406,18 +435,24 @@ def ocr_obrazku(cesty):
         return [None] * len(cesty)
     except (ValueError, OSError):
         v = None
+    if v is None:  # osascript nejde – zkusí se příště, ne „obrázek bez textu“
+        return [None] * len(cesty)
     return v if isinstance(v, list) and len(v) == len(cesty) else [""] * len(cesty)
 
 
 def z_pdf(cesta, info, slozka):
     zbyva = max(zbyva_ocr(), 0) if ocr_zapnuto() else 0
     strany = osascript(["pdf", str(int((time.time() + zbyva) * 1000) if zbyva >= 5 else 0), ocr_jazyky(),
-                        str(cesta), str(OCR_MAX_STRAN)], 300 + zbyva) or []
+                        str(cesta), str(OCR_MAX_STRAN)], 300 + zbyva)
+    if not strany:  # osascript nejde nebo PDF neotevřel (sandbox, chyba macOS) – nezapisovat prázdnou cache
+        raise OcrNedostupne(cesta.name)
     bloky = []
     for i, s in enumerate(strany, 1):
         text = (s.get("t") or "").strip()
         info["ocr"] += s.get("o") == 1
         info["odlozeno"] |= s.get("o") == 2 and ocr_zapnuto()
+        if s.get("o") == 3:
+            info["neprecteno"].setdefault("limit_stran", []).append(i)
         if len(re.sub(r"\s", "", text)) < MALO_TEXTU and s.get("o") != 2:
             info["obrazove"].append(i)
         bloky.append(f"=== strana {i} ===\n{text}")
@@ -549,7 +584,7 @@ def oznac(cesta, stav, poznamka=None):
         if data["chybi"] and not bez_ai:
             sys.exit(T["kontrola_neoznaceno"].format(c=len(data["chybi"])))
         if pozn and frontmatter(pozn).get("typ") != "predmet":  # přehled předmětu (osnova) vlastnost nedostane
-            nastav_vlastnost(pozn, "uplnost", "k-overeni" if data["chybi"] or data["k_overeni"] else "uplna")
+            nastav_vlastnost(pozn, "uplnost", "k-overeni" if data["chybi"] or data["k_overeni"] or zbyva_neprecteno(data) else "uplna")
     reg = nacti_registr()
     reg[rel] = {"otisk": otisk(p), "stav": stav, "datum": date.today().isoformat(), **podpis(p)}
     uloz_registr(reg)
@@ -621,7 +656,7 @@ def jmena_v(radek):
 def polozky_kontroly(text, typ):
     """Povinné položky z textu cache. Každá má id, druh, text, kde a podklady pro porovnání (k, c, d, u, podil)."""
     polozky, videne, pocty = [], set(), Counter()
-    kde = ""
+    kde, cislo_radku = "", 0  # řádek položky v cache – podle něj kontrola po kapitolách
 
     def pridej(druh, popis, podil=1.0, **podklad):
         popis = re.sub(r"\s+", " ", popis).strip()
@@ -636,7 +671,7 @@ def polozky_kontroly(text, typ):
         predpona = {"nadpis": "n", "definice": "d", "tabulka": "t", "graf": "g", "datum": "dt", "cislo": "c",
                     "jmeno": "j", "odkaz": "o", "vycet": "v"}[druh]
         polozky.append({"id": f"{predpona}{pocty[druh]}", "druh": druh, "text": popis[:90], "kde": kde, "podil": podil,
-                        **podklad})
+                        "r": cislo_radku, **podklad})
 
     def tabulka(radky, nazev=""):
         bunky = [b.strip().replace("\\|", "|") for r in radky if not re.fullmatch(r"\|[-|: ]*\|", r)
@@ -658,6 +693,7 @@ def polozky_kontroly(text, typ):
     while i < len(radky):
         r = radky[i].strip()
         dalsi = next((x.strip() for x in radky[i + 1:] if x.strip()), "")
+        cislo_radku = i
         i += 1
         if not r:
             continue
@@ -777,6 +813,83 @@ def najdi_poznamku(rel, zadana):
     return nalezene[0][0]
 
 
+def rozsahy(cisla):
+    """[1, 2, 3, 7] → „1-3,7“ (do hlavičky cache, bez mezer a svislítek)."""
+    cisla, vysledek = sorted(set(cisla)), []
+    for c in cisla:
+        if vysledek and c == vysledek[-1][1] + 1:
+            vysledek[-1][1] = c
+        else:
+            vysledek.append([c, c])
+    return ",".join(f"{a}-{b}" if a != b else str(a) for a, b in vysledek)
+
+
+def neprectene(hlava, T):
+    """Co skript z materiálu nepřečetl (z hlavičky cache) jako texty pro frontu, kontrolu a Domov."""
+    vysledek = []
+    m = re.search(r"\| neprecteno: ([^|]*?)\s*(?:\||-->)", hlava)
+    for cast in (m.group(1).split(";") if m else []):
+        kod, _, hodnota = cast.partition("=")
+        hodnota = re.sub(r"[^\d,-]", "", hodnota).replace(",", ", ").replace("-", "–")
+        if f"np_{kod}" in T and hodnota:
+            vysledek.append(T[f"np_{kod}"].format(s=hodnota))
+    if "ocr_odlozeno" in hlava:
+        vysledek.append(T["np_odlozeno"])
+    return vysledek
+
+
+def telo_cache(text):
+    return text.split("\n", 1)[-1]
+
+
+def rozdel_kapitoly(telo):
+    """Rozdělí text cache na kapitoly do KAPITOLA tokenů – jen na hranici slajdu, strany nebo nadpisu
+    (bez nich po odstavcích, nikdy uprostřed tabulky). Vrátí [{od_radku, do_radku, od, do, tokeny}]."""
+    radky = telo.split("\n")
+    znacka = re.compile(r"=== (slajd|strana) (\d+)|#{1,6} (.*)")
+    hranice = [i for i, r in enumerate(radky) if znacka.match(r)]
+    if not hranice:  # prostý text: každý odstavec mimo pokračování tabulky
+        hranice = [i for i, r in enumerate(radky) if r.strip() and not (r.startswith("|") and i and radky[i - 1].startswith("|"))]
+    hranice = sorted(set([0] + hranice))
+    useky = [(a, b) for a, b in zip(hranice, hranice[1:] + [len(radky)])]
+
+    def stitek(i):
+        m = znacka.match(radky[i])
+        if m and m.group(1):
+            return f"{m.group(1)} {m.group(2)}"
+        return (m.group(3) if m else radky[i].strip())[:40] or f"řádek {i + 1}"
+
+    kapitoly, od, velikost = [], 0, 0
+    for a, b in useky:
+        delka = tokeny("\n".join(radky[a:b]))
+        if velikost and velikost + delka > KAPITOLA:
+            kapitoly.append((od, a))
+            od, velikost = a, 0
+        velikost += delka
+    kapitoly.append((od, len(radky)))
+    vysledek = []
+    for a, b in kapitoly:
+        prvni = next((i for i in range(a, b) if radky[i].strip()), a)
+        posledni = max((i for i in hranice if a <= i < b and radky[i].strip()), default=prvni)
+        vysledek.append({"od_radku": a, "do_radku": b, "od": stitek(prvni), "do": stitek(posledni),
+                         "tokeny": tokeny("\n".join(radky[a:b]))})
+    return vysledek
+
+
+def zapis_kapitoly(cil, text):
+    """Kapitoly velkého materiálu jako samostatné soubory cache vedle celé cache (AI čte jen jednu najednou)."""
+    hlava, telo = text.split("\n", 1)[0], telo_cache(text)
+    zdroj = (re.search(r"zdroj: ([^|]*)\|", hlava) or [None, ""])[1].strip()
+    radky, kapitoly = telo.split("\n"), rozdel_kapitoly(telo)
+    vysledek = []
+    for n, k in enumerate(kapitoly, 1):
+        soubor = cil.with_name(f"{cil.stem}-k{n:02}.md")
+        soubor.write_text(f"<!-- zdroj: {zdroj} | kapitola: {n}/{len(kapitoly)} | od: {k['od']} | do: {k['do']} -->\n\n"
+                          + "\n".join(radky[k["od_radku"]:k["do_radku"]]).strip() + "\n")
+        vysledek.append({"cast": n, "cache": str(soubor.relative_to(TREZOR)), "od": k["od"], "do": k["do"], "tokeny": k["tokeny"]})
+    return vysledek
+
+
 def k_overeni_hotovych(reg, T):
     """Hotové materiály s místy k ověření: [(poznámka, zdroj, místa)]. Kontroly smazaných a změněných materiálů zahodí."""
     if not KONTROLA.is_dir():
@@ -795,7 +908,8 @@ def k_overeni_hotovych(reg, T):
         if not isinstance(data, dict) or reg[rel]["stav"] != "hotovo":
             continue
         podle_id = {x["id"]: x for x in data.get("polozky") or [] if isinstance(x, dict) and "id" in x}
-        mista = [str(m) for m in data.get("k_overeni") or []] + \
+        mista = [T["k_overeni_neprecteno"].format(s=m["text"]) for m in zbyva_neprecteno(data)] + \
+                [str(m) for m in data.get("k_overeni") or []] + \
                 [f"{T.get('druh_' + str(podle_id[i].get('druh')), '')}: {podle_id[i].get('text', '')}"
                  for i in data.get("chybi") or [] if i in podle_id]
         if mista:
@@ -817,7 +931,7 @@ def nacti_kontrolu(p):
         return None
 
 
-def kontroluj(p, rel, zadana=None, tisk=True):
+def kontroluj(p, rel, zadana=None, tisk=True, kapitola=None):
     """Porovná položky cache s poznámkou, výsledek uloží a vypíše. Vrátí (data, poznámka nebo None)."""
     T = texty()
     h = otisk(p)
@@ -828,19 +942,30 @@ def kontroluj(p, rel, zadana=None, tisk=True):
         sys.exit(T["kontrola_chybi_poznamka"].format(n=Path(rel).name, m=rel))
     if pozn is None:  # bez AI a bez poznámky (zpracováno jinde, třeba na papíře) – není co porovnat
         return {"chybi": [], "k_overeni": []}, None
+    rozsah, kap_info = None, ""
     if cache.exists():
         obsah = cache.read_text(errors="ignore")
         typ = (re.search(r"\| typ: ([^|]+)", obsah.split("\n", 1)[0]) or [None, ""])[1].strip()
-        polozky = polozky_kontroly(obsah.split("\n", 1)[-1], typ)
+        polozky = polozky_kontroly(telo_cache(obsah), typ)
+        neprecteno = [{"id": f"np{n}", "text": x} for n, x in enumerate(neprectene(obsah.split("\n", 1)[0], T), 1)]
+        if kapitola is not None:
+            kapitoly = rozdel_kapitoly(telo_cache(obsah))
+            if not (kapitola.isascii() and kapitola.isdigit() and 1 <= int(kapitola) <= len(kapitoly)):
+                sys.exit(T["kontrola_kapitola"].format(n=len(kapitoly)))
+            k = kapitoly[int(kapitola) - 1]
+            rozsah = range(k["od_radku"], k["do_radku"])
+            kap_info = T["kontrola_kapitola_info"].format(n=kapitola, c=len(kapitoly), od=k["od"], do=k["do"])
+    elif kapitola is not None:
+        sys.exit(T["kontrola_bez_cache"])
     else:
-        polozky = []
+        polozky, neprecteno = [], []
     stara = nacti_kontrolu(p) or {}
-    ids = {x["id"] for x in polozky}
+    ids = {x["id"] for x in polozky} | {x["id"] for x in neprecteno}
     data = {"verze": KONTROLA_VERZE, "zdroj": rel, "otisk": h, "datum": date.today().isoformat(),
             "poznamka": nfc(str(pozn.resolve().relative_to(TREZOR.resolve()))) if pozn else None,
             "polozky": polozky, "pokryto": [], "chybi": [],
             "vynechano": {k: v for k, v in (stara.get("vynechano") or {}).items() if k in ids},
-            "k_overeni": list(stara.get("k_overeni") or [])}
+            "k_overeni": list(stara.get("k_overeni") or []), "neprecteno": neprecteno}
     if pozn:
         text = pozn.read_text(errors="ignore")
         if text.startswith("---") and text.count("---") >= 2:
@@ -856,16 +981,23 @@ def kontroluj(p, rel, zadana=None, tisk=True):
     KONTROLA.mkdir(parents=True, exist_ok=True)
     soubor_kontroly(p).write_text(json.dumps(data, ensure_ascii=False, indent=1))
     if tisk:
-        print(T["kontrola_vysledek"].format(m=rel, p=data["poznamka"] or "—", a=len(data["pokryto"]), b=len(polozky),
-                                            v=len(data["vynechano"]), c=len(data["chybi"]), k=len(data["k_overeni"])))
+        podle_id = {x["id"]: x for x in polozky}
+        v_kapitole = (lambda i: podle_id[i]["r"] in rozsah) if rozsah else (lambda i: True)
+        vypis = {k: [i for i in data[k] if v_kapitole(i)] for k in ("pokryto", "chybi")}
+        if kap_info:
+            print(kap_info)
+        print(T["kontrola_vysledek"].format(m=rel, p=data["poznamka"] or "—", a=len(vypis["pokryto"]),
+                                            b=sum(1 for x in polozky if v_kapitole(x["id"])), v=len(data["vynechano"]),
+                                            c=len(vypis["chybi"]), k=len(data["k_overeni"])))
         if not cache.exists():
             print(T["kontrola_bez_cache"])
-        podle_id = {x["id"]: x for x in polozky}
-        for i in data["chybi"]:
+        for x in zbyva_neprecteno(data):
+            print(T["kontrola_neprecteno"].format(id=x["id"], s=x["text"]))
+        for i in vypis["chybi"]:
             x = podle_id[i]
             print(T["kontrola_polozka"].format(id=i, druh=T.get("druh_" + x["druh"], x["druh"]), text=x["text"],
                                                kde=f" ({x['kde']})" if x["kde"] else ""))
-        if data["chybi"] and not bez_ai:  # bez AI uživatel příkazy nepíše, výsledek mu ukáže rozšíření
+        if vypis["chybi"] and not bez_ai:  # bez AI uživatel příkazy nepíše, výsledek mu ukáže rozšíření
             print(T["kontrola_rada"].format(m=rel))
         if bez_ai:
             print(T["kontrola_bez_ai"])
@@ -882,7 +1014,8 @@ def vynech(cesta, ids, duvod):
     if not duvod:
         sys.exit(T["kontrola_duvod"])
     vybrane = [i.strip() for i in ids.split(",") if i.strip()]
-    nezname = [i for i in vybrane if i not in {x["id"] for x in data["polozky"]}]
+    nezname = [i for i in vybrane if i not in {x["id"] for x in data["polozky"]} | {x.get("id") for x in data.get("neprecteno") or []
+                                                                                  if isinstance(x, dict)}]
     if nezname or not vybrane:
         sys.exit(T["kontrola_nezname_id"].format(s=", ".join(nezname) or "—"))
     data["vynechano"].update({i: duvod for i in vybrane})
@@ -904,6 +1037,12 @@ def pridej_k_overeni(cesta, text):
     KONTROLA.mkdir(parents=True, exist_ok=True)
     soubor_kontroly(p).write_text(json.dumps(data, ensure_ascii=False, indent=1))
     print(T["kontrola_k_overeni"].format(n=len(data["k_overeni"]), s=text))
+
+
+def zbyva_neprecteno(data):
+    """Nepřečtené části, které AI nevyřešila (`--vynech np1 "přečteno z originálu…"`)."""
+    vyreseno = data.get("vynechano") or {}
+    return [x for x in data.get("neprecteno") or [] if isinstance(x, dict) and x.get("id") not in vyreseno and "text" in x]
 
 
 def nastav_vlastnost(p, klic, hodnota):
@@ -973,6 +1112,7 @@ def nechat_obe(a, b):
 
 def prehled():
     CACHE.mkdir(parents=True, exist_ok=True)
+    T = texty()
     reg = nacti_registr()
     existujici = {rel for _, rel in materialy()}
     # starší registr: „duplicita“ souboru, který už neexistuje (přesunutý originál) → soubor přebírá jeho roli
@@ -1017,18 +1157,34 @@ def prehled():
         hlava = cil.read_text().split("\n", 1)[0] if cil.exists() else ""
         verze = re.search(r"\| cache: (\d+)", hlava)
         # cache starší verze nebo s nedočteným OCR (došel čas) se vytvoří znovu
+        prepsat = False
         if not verze or int(verze.group(1)) != CACHE_VERZE or "ocr_odlozeno" in hlava:
-            shutil.rmtree(slozka, ignore_errors=True)
-            info = {"ocr": 0, "odlozeno": False, "obrazove": [], "obrazky": []}
+            zaloha_slozky = slozka.with_name(slozka.name + ".stara")
+            shutil.rmtree(zaloha_slozky, ignore_errors=True)
+            if slozka.is_dir():
+                slozka.rename(zaloha_slozky)
+            info = {"ocr": 0, "odlozeno": False, "obrazove": [], "obrazky": [], "neprecteno": {}}
+            nedostupne = False
             try:
                 bloky, typ = extrahuj(p, info, slozka)
+            except OcrNedostupne:
+                bloky, typ, nedostupne = [], "pdf", True
+                info["odlozeno"] = True
             except Exception as e:  # poškozený nebo zamčený soubor
                 bloky, typ = [], "chyba: " + re.sub(r"[\s|]+", " ", str(e))[:200]
+            if nedostupne and cil.exists():  # stará cache zůstane, dokud nová nepůjde přečíst
+                shutil.rmtree(slozka, ignore_errors=True)
+                if zaloha_slozky.is_dir():
+                    zaloha_slozky.rename(slozka)
+            shutil.rmtree(zaloha_slozky, ignore_errors=True)
+            prepsat = not (nedostupne and cil.exists())
+        if prepsat:
             text, odstraneno = vycisti(bloky)
             zdroj = re.sub(r"[\x00-\x1f\x7f|]", " ", rel)  # nový řádek v názvu by rozbil hlavičku
             cil.write_text(f"<!-- zdroj: {zdroj} | typ: {typ} | bloků: {len(bloky)} | "
                            f"odstraněno opakujících se řádků: {odstraneno} | cache: {CACHE_VERZE} | ocr: {info['ocr']} | "
                            f"obrazove: {','.join(map(str, info['obrazove']))}"
+                           + (" | neprecteno: " + ";".join(f"{k}={rozsahy(v)}" for k, v in info["neprecteno"].items()) if info["neprecteno"] else "")
                            + (" | ocr_odlozeno: 1" if info["odlozeno"] else "") + f" -->\n\n{text}\n")
         text = cil.read_text()
         hlava = text.split("\n", 1)[0]
@@ -1048,7 +1204,7 @@ def prehled():
             elif typ == "pdf" and bloku and len(text) / bloku < 80:
                 poznamka = "SKEN – text chybí, číst obrazem jen vybrané strany"
             elif t > VELKE:
-                poznamka = "VELKÉ – zpracovat jen jako shrnutí"
+                poznamka = "VELKÉ – zeptej se uživatele: po kapitolách (pole kapitoly), jen shrnutí, nebo přeskočit"
             elif typ == "pdf" and ocr:
                 poznamka = "SKEN (OCR) – text rozpoznán v macOS, originál otevřít jen u nejasných stran"
             # odhad, kolik by stálo čtení originálu (PDF/prezentace AI čte i jako obrázky)
@@ -1058,6 +1214,13 @@ def prehled():
             polozka.update(typ=typ, tokeny=t, slova=len(text.split("\n", 1)[-1].split()), bloky=bloku, cache=str(cil.relative_to(TREZOR)), poznamka=poznamka)
             if obrazove:
                 polozka["obrazove"] = obrazove[:50]
+            for stara in CACHE.glob(f"{h[:16]}-k*.md"):
+                stara.unlink()
+            if t > VELKE and typ != "obrázek":
+                polozka["kapitoly"] = zapis_kapitoly(cil, text)
+            neprecteno = neprectene(hlava, T)
+            if neprecteno:
+                polozka["neprecteno"] = neprecteno
             if slozka.is_dir():
                 polozka["obrazky"] = sorted((nfc(str(x.relative_to(TREZOR))) for x in slozka.iterdir()),
                                             key=lambda x: [int(c) if c.isdigit() else c for c in re.split(r"(\d+)", x)])
@@ -1097,7 +1260,8 @@ def prehled():
         return T["rozsah_obrazek"] if f["typ"] == "obrázek" else T["rozsah_slova"].format(n=f.get("slova", 0))
     # /zpracuj vezme najednou DAVKA položek; k přečtení se přičte i psaní poznámek a pojmů (VYSTUP na položku)
     davek = -(-len(fronta) // DAVKA)
-    odhad_celkem = sum(f["tokeny"] for f in fronta) + len(fronta) * VYSTUP
+    # bez stropů roste poznámka s materiálem: odhad psaní ~ polovina čtení, nejméně VYSTUP (ověřit měřením /zpracuj)
+    odhad_celkem = sum(f["tokeny"] + max(VYSTUP, f["tokeny"] // 2) for f in fronta)
     # poznámky ve fronta.json zůstávají česky (čte je AI), do Fronta.md jdou v jazyce uživatele
     pozn_preklad = {"SKEN (OCR)": T["pozn_sken_ocr"], "SKEN": T["pozn_sken"], "VELKÉ": T["pozn_velke"],
                     "AI přečte": T["pozn_obrazek"], "OCR": T["pozn_ocr"]}
@@ -1123,6 +1287,8 @@ def prehled():
             typ = T.get("typ_" + f["typ"], f["typ"])
             mnozstvi = rozsah(f) if bez_ai else cislo(f["tokeny"])
             pozn = "" if bez_ai and f["poznamka"].startswith(("VELKÉ", "AI přečte", "OCR", "SKEN (OCR)")) else preloz(f["poznamka"])
+            if f.get("neprecteno"):
+                pozn = (pozn + " " if pozn else "") + "⚠️ " + T["np_fronta"]
             radky.append(f"| {Path(f['soubor']).name.replace('|', '/')} | {f['predmet']} | {typ} | {mnozstvi} | {pozn} |")
     if duplicity:
         radky += ["", f"## {T['duplicity_nadpis']}", T["duplicity_rada"], ""]
@@ -1441,8 +1607,15 @@ if __name__ == "__main__":
         oznac(sys.argv[2], "hotovo", sys.argv[3] if len(sys.argv) == 4 else None)
     elif len(sys.argv) == 3 and sys.argv[1] == "--preskoc":
         oznac(sys.argv[2], "preskoceno")
-    elif len(sys.argv) in (3, 4) and sys.argv[1] == "--kontrola":
-        kontroluj(*soubor_v_trezoru(sys.argv[2]), sys.argv[3] if len(sys.argv) == 4 else None)
+    elif len(sys.argv) in (3, 4, 5, 6) and sys.argv[1] == "--kontrola":
+        argumenty, kapitola = sys.argv[2:], None
+        if "--kapitola" in argumenty[1:]:
+            i = argumenty.index("--kapitola", 1)
+            kapitola = argumenty[i + 1] if i + 1 < len(argumenty) else ""
+            argumenty = argumenty[:i] + argumenty[i + 2:]
+        if len(argumenty) > 2:
+            sys.exit("Použití: priprav.py --kontrola CESTA [POZNÁMKA] [--kapitola N]")
+        kontroluj(*soubor_v_trezoru(argumenty[0]), argumenty[1] if len(argumenty) == 2 else None, kapitola=kapitola)
     elif len(sys.argv) == 5 and sys.argv[1] == "--vynech":
         vynech(*sys.argv[2:])
     elif len(sys.argv) == 4 and sys.argv[1] == "--k-overeni":

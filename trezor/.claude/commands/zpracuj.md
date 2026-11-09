@@ -11,6 +11,9 @@ Zpracuj nové studijní materiály podle `.claude/CLAUDE.md`.
 3. Pro každou položku fronty (nejdřív zadání úkolů a osnovy, pak učivo):
    - přečti jen cache (originál nebo `obrazky` jen podle pravidel v CLAUDE.md); tabulky, data grafů, `[poznámky řečníka]`
      a `[odkazy]` v cache patří do výpisků,
+   - položka `VELKÉ` (má `kapitoly`): nejdřív se zeptej uživatele – po kapitolách (počet kapitol a odhad tokenů),
+     jen shrnutí, nebo přeskočit (nechat ve frontě). Po kapitolách: čti vždy jen jednu kapitolu (`kapitoly[].cache`),
+     dopiš ji do poznámky a zkontroluj `python3 _Systém/priprav.py --kontrola "<cesta>" --kapitola N`; `--hotovo` až po poslední,
    - rozhodni typ: přednáška/učivo → poznámka `prednaska`; zadání → `ukol`; osnova → doplň přehled předmětu;
      vlastní práce nebo odkaz `.webloc` → zapiš do přehledu předmětu (sekce Odevzdáno / Odkazy);
    - vytvoř nebo doplň poznámky a pojmy (poznámka má `zdroj: "[[<název souboru>]]"`),

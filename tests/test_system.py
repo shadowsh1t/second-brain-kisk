@@ -52,6 +52,28 @@ def pptx(cesta, text):
                    f'<a:t>{text}</a:t></a:r></a:p></p:sld>')
 
 
+def velka_pptx(cesta, slajdu, znaku):
+    """Prezentace s nadpisy a dlouhým textem na každém slajdu (materiál VELKÉ)."""
+    with zipfile.ZipFile(cesta, "w") as z:
+        for i in range(1, slajdu + 1):
+            text = " ".join(f"slovo{i}x{j}" for j in range(znaku // 10))
+            nazev = "".join(chr(97 + int(c)) for c in f"{i:03}") + "x"  # jiné písmenné slovo na každém slajdu
+            z.writestr(f"ppt/slides/slide{i}.xml", '<p:sld xmlns:p="p" xmlns:a="a"><p:cSld><p:spTree>'
+                       f'<p:sp><p:nvSpPr><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr><p:txBody><a:p><a:r><a:t>{nazev} kapitola</a:t></a:r></a:p></p:txBody></p:sp>'
+                       f'<p:sp><p:txBody><a:p><a:r><a:t>{text}</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>')
+
+
+def obrazkova_pptx(cesta, velkych, malych):
+    """Slajdy jen s obrázkem: `velkych` obrázků nad hranicí OCR, za nimi `malych` malých."""
+    with zipfile.ZipFile(cesta, "w") as z:
+        for i in range(1, velkych + malych + 1):
+            z.writestr(f"ppt/slides/slide{i}.xml", '<p:sld xmlns:p="p" xmlns:a="a" xmlns:r="r"><p:cSld><p:spTree>'
+                       '<p:pic><p:blipFill><a:blip r:embed="rId1"/></p:blipFill></p:pic></p:spTree></p:cSld></p:sld>')
+            z.writestr(f"ppt/slides/_rels/slide{i}.xml.rels", f'<Relationships><Relationship Id="rId1" Type="{R}image" '
+                       f'Target="../media/image{i}.png"/></Relationships>')
+            z.writestr(f"ppt/media/image{i}.png", b"\x89PNG\r\n\x1a\n" + os.urandom(30_000 if i <= velkych else 500))
+
+
 def bohata_pptx(cesta):
     """Slajd s nadpisem, tabulkou, grafem, poznámkami řečníka a odkazy (rels s ../ i s absolutní cestou)."""
     with zipfile.ZipFile(cesta, "w") as z:
@@ -94,8 +116,11 @@ class Trezor(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def spust(self, skript, *argumenty, ocekavam_chybu=False):
+        env = {**os.environ, "TREZOR": str(self.t)}
+        if getattr(self, "bin", None):  # falešný osascript má přednost před systémovým
+            env["PATH"] = f"{self.bin}{os.pathsep}{env.get('PATH', '')}"
         r = subprocess.run([sys.executable, str(self.t / skript), *argumenty], cwd=self.t,
-                           capture_output=True, text=True, env={**os.environ, "TREZOR": str(self.t)})
+                           capture_output=True, text=True, env=env)
         if ocekavam_chybu:
             self.assertNotEqual(r.returncode, 0, r.stdout)
         else:
@@ -116,6 +141,24 @@ class Trezor(unittest.TestCase):
         self.hotovo(fronta[0]["soubor"])
         self.spust("_Systém/priprav.py")
         self.assertEqual(json.loads((self.t / "_Systém/fronta.json").read_text()), [])
+
+    def falesny_osascript(self, strany=None, obrazek="Text z grafu", chyba=False):
+        """Napodobí macOS (PDFKit + Vision přes JXA): `strany` = odpověď pro PDF, `obrazek` = text každého obrázku,
+        `chyba` = osascript nejde (sandbox, chyba macOS). Testy OCR tak běží i bez macOS automatizace."""
+        self.bin = self.tmp / "bin"
+        self.bin.mkdir(exist_ok=True)
+        f = self.bin / "osascript"
+        f.write_text(f"""#!{sys.executable}
+import json, sys
+if {chyba!r}:
+    sys.exit("execution error: Error: -2741")
+rezim = sys.argv[5]
+if rezim == "pdf":
+    print(json.dumps({json.dumps(strany or [])}))
+else:
+    print(json.dumps([{obrazek!r}] * len(sys.argv[8:])))
+""")
+        f.chmod(0o755)
 
     def poznamka(self, material, text, nazev=None):
         """Poznámka k materiálu se `zdroj: "[[soubor]]"` (jak ji píše AI)."""
@@ -236,6 +279,121 @@ class Trezor(unittest.TestCase):
         prehled = (self.t / PREDMET / f"{PREDMET}.md").read_text()
         self.spust("_Systém/priprav.py", "--hotovo", m, f"{PREDMET}/{PREDMET}.md")
         self.assertEqual((self.t / PREDMET / f"{PREDMET}.md").read_text(), prehled)
+
+    def test_velky_material_po_kapitolach(self):
+        """Cache nad VELKE se rozdělí na kapitoly po slajdech; kontrola jde i po kapitolách, hotovo až za celý materiál."""
+        self.nastav(ocr=False)
+        velka_pptx(self.t / PREDMET / "velka.pptx", 60, 2000)
+        r = self.spust("_Systém/priprav.py")
+        m = f"{PREDMET}/velka.pptx"
+        f = json.loads((self.t / "_Systém/fronta.json").read_text())[0]
+        self.assertTrue(f["poznamka"].startswith("VELKÉ"), f["poznamka"])
+        kap = f["kapitoly"]
+        self.assertGreaterEqual(len(kap), 3)
+        cela = (self.t / f["cache"]).read_text().split("\n", 1)[1].strip()
+        casti = [(self.t / k["cache"]).read_text().split("\n", 1)[1].strip() for k in kap]
+        self.assertEqual("\n\n".join(casti), cela, "kapitoly dají dohromady celou cache")
+        for k, text in zip(kap, casti):
+            self.assertLessEqual(k["tokeny"], 15_000)
+            self.assertTrue(text.startswith("=== slajd"), text[:40])
+            self.assertTrue(k["od"].startswith("slajd") and k["do"].startswith("slajd"), k)
+        # odhad psaní roste s velikostí materiálu
+        odhad = int(re.search(r"psaním poznámek ~([\d ]+)", r.stdout.replace("\u00a0", " ")).group(1).replace(" ", ""))
+        self.assertGreater(odhad, f["tokeny"] * 1.3)
+        # kontrola jen jedné kapitoly
+        self.poznamka(m, "Úvod")
+        od, do = (int(kap[1][x].split()[1]) for x in ("od", "do"))
+        r = self.spust("_Systém/priprav.py", "--kontrola", m, "--kapitola", "2")
+        slajdy = {int(x) for x in re.findall(r"\(slajd (\d+)\)", r.stdout)}
+        self.assertTrue(slajdy and all(od <= x <= do for x in slajdy), (od, do, slajdy))
+        self.spust("_Systém/priprav.py", "--kontrola", m, "--kapitola", "99", ocekavam_chybu=True)
+        self.spust("_Systém/priprav.py", "--kontrola", m, "--kapitola", "x", ocekavam_chybu=True)
+        self.spust("_Systém/priprav.py", "--hotovo", m, ocekavam_chybu=True)
+
+    def test_neprectene_se_hlasi(self):
+        """Obrázky nad limit OCR a malé obrázky na obrazových slajdech se hlásí ve frontě i v kontrole; poznámka je k ověření."""
+        self.nastav(ocr=False)
+        obrazkova_pptx(self.t / PREDMET / "obrazky.pptx", 12, 1)
+        self.spust("_Systém/priprav.py")
+        m = f"{PREDMET}/obrazky.pptx"
+        f = json.loads((self.t / "_Systém/fronta.json").read_text())[0]
+        np = " ".join(f.get("neprecteno", []))
+        self.assertIn("11", np)
+        self.assertIn("12", np)
+        self.assertIn("13", np)
+        self.assertIn("⚠️", (self.t / "_Systém/Fronta.md").read_text())
+        p = self.poznamka(m, "Obrázky bez textu.")
+        r = self.spust("_Systém/priprav.py", "--hotovo", m)
+        self.assertIn("13", r.stdout)
+        self.assertIn("uplnost: k-overeni", p.read_text())
+        self.spust("_Systém/priprav.py")
+        self.assertIn("13", (self.t / "_Systém/Fronta.md").read_text().split("## K ověření")[1])
+
+    def docx_s_obrazky(self, nazev, velkych):
+        with zipfile.ZipFile(self.t / PREDMET / nazev, "w") as z:
+            z.writestr("word/document.xml", f'<w:document {W}><w:body><w:p><w:r><w:t>Text</w:t></w:r></w:p></w:body></w:document>')
+            for i in range(1, velkych + 1):
+                z.writestr(f"word/media/image{i}.png", b"\x89PNG\r\n\x1a\n" + os.urandom(30_000))
+            z.writestr("word/media/logo.png", b"\x89PNG\r\n\x1a\n" + os.urandom(500))
+
+    def test_obrazky_ve_wordu_se_prectou(self):
+        """Obrázky ve Wordu se vybalí do cache (AI je vidí) a přečte je OCR; logo ne; nad limit 10 se nahlásí."""
+        self.falesny_osascript(obrazek="Text z grafu")
+        self.docx_s_obrazky("s_obrazkem.docx", 1)
+        self.docx_s_obrazky("mnoho.docx", 12)
+        self.spust("_Systém/priprav.py")
+        fronta = {Path(f["soubor"]).name: f for f in json.loads((self.t / "_Systém/fronta.json").read_text())}
+        jeden = fronta["s_obrazkem.docx"]
+        self.assertEqual(len(jeden.get("obrazky", [])), 1, jeden)
+        self.assertNotIn("neprecteno", jeden)
+        self.assertIn("[text z obrázku]\nText z grafu", (self.t / jeden["cache"]).read_text())
+        self.assertEqual(len(fronta["mnoho.docx"].get("obrazky", [])), 10)
+        self.assertIn("2", " ".join(fronta["mnoho.docx"].get("neprecteno", [])))
+
+    def test_pdf_nad_limit_ocr_se_hlasi(self):
+        """Strany nad limit OCR (kód 3 z macOS) se nahlásí; strany s OCR se počítají."""
+        self.falesny_osascript(strany=[{"t": f"Strana {i} s rozpoznaným textem o knihovnách a informacích.", "o": 1}
+                                       for i in range(1, 61)] + [{"t": "", "o": 3}, {"t": "", "o": 3}])
+        (self.t / PREDMET / "sken.pdf").write_bytes(b"%PDF-1.4 falesny")
+        self.spust("_Systém/priprav.py")
+        f = json.loads((self.t / "_Systém/fronta.json").read_text())[0]
+        self.assertIn("61–62", " ".join(f.get("neprecteno", [])), f)
+        self.assertIn("Strana 60", (self.t / f["cache"]).read_text())
+
+    def test_nefunkcni_osascript_neznici_cache(self):
+        """Když osascript nejde, nová cache se odloží (zkusí se příště) a stará se nepřepíše prázdnou."""
+        self.falesny_osascript(chyba=True)
+        (self.t / PREDMET / "novy.pdf").write_bytes(b"%PDF-1.4 novy")
+        (self.t / PREDMET / "stary.pdf").write_bytes(b"%PDF-1.4 stary")
+        self.spust("_Systém/priprav.py")
+        fronta = {Path(f["soubor"]).name: f for f in json.loads((self.t / "_Systém/fronta.json").read_text())}
+        novy = (self.t / fronta["novy.pdf"]["cache"]).read_text()
+        self.assertIn("ocr_odlozeno", novy.split("\n", 1)[0], "nový materiál se zkusí přečíst znovu")
+        stary = self.t / fronta["stary.pdf"]["cache"]
+        stary.write_text("<!-- zdroj: x | typ: pdf | bloků: 1 | odstraněno opakujících se řádků: 0 | cache: 2 | ocr: 0 | obrazove:  -->\n\nstarý text\n")
+        self.spust("_Systém/priprav.py")
+        self.assertIn("starý text", stary.read_text(), "stará cache zůstane, dokud se nepodaří přečíst novou")
+        self.falesny_osascript(strany=[])  # macOS PDF neotevřel (sandbox, zamčený soubor) – žádná strana
+        self.spust("_Systém/priprav.py")
+        self.assertIn("starý text", stary.read_text(), "prázdný výsledek není prázdný materiál")
+        self.falesny_osascript(strany=[{"t": "Nový text z PDF o metadatech a katalogizaci dokumentů.", "o": 0}])
+        self.spust("_Systém/priprav.py")
+        self.assertIn("Nový text z PDF", stary.read_text())
+        self.assertIn("Nový text z PDF", (self.t / fronta["novy.pdf"]["cache"]).read_text())
+
+    def test_neprectene_jde_vyresit(self):
+        """Nepřečtenou část AI dočte z originálu a vyřeší ji se zdůvodněním → poznámka může být úplná."""
+        self.nastav(ocr=False)
+        obrazkova_pptx(self.t / PREDMET / "obrazky.pptx", 12, 0)
+        self.spust("_Systém/priprav.py")
+        m = f"{PREDMET}/obrazky.pptx"
+        p = self.poznamka(m, "Obrázky.")
+        r = self.spust("_Systém/priprav.py", "--kontrola", m)
+        np = re.findall(r"⚠️ (np\d+)", r.stdout)
+        self.assertTrue(np, r.stdout)
+        self.spust("_Systém/priprav.py", "--vynech", m, ",".join(np), "přečteno z originálu, slajdy 11–12")
+        self.spust("_Systém/priprav.py", "--hotovo", m)
+        self.assertIn("uplnost: uplna", p.read_text())
 
     def test_bez_ai_hotovo_posoudi_jen_pokryti(self):
         """Bez AI se materiál označí i s mezerami, poznámka dostane `k-overeni` a výpis řekne, že jde jen o pokrytí."""

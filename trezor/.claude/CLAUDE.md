@@ -57,11 +57,15 @@ Kód každého předmětu je ve vlastnosti `kod` jeho přehledu `<Předmět>/<P�
 2. Originál čti jen u typu `obrázek` bez cache a u PDF označených `SKEN` – a to maximálně 5 stran najednou (parametr `pages`).
    `SKEN (OCR)` a obrázky s cache už mají text rozpoznaný v macOS – čti cache a originál otevři jen tam, kde text nedává smysl.
    Pole `obrazove` ve `fronta.json` jsou slajdy/strany, kde je hlavně obrázek (graf, schéma, foto); `obrazky` jsou jejich obrázky
-   vybalené do cache. Podívej se na ně jen tehdy, když bez nich výpisky nedávají smysl.
+   vybalené do cache. Když je na nich graf, schéma, diagram nebo tabulka, podívej se na ně vždy a obsah zapiš do výpisků
+   (fotky a dekorace přeskoč). Pole `neprecteno` říká, co skript nepřečetl (strany a obrázky nad limit OCR, odložené OCR).
+   Kontrola úplnosti je vypíše jako `⚠️ npN`. Když část jde přečíst z originálu (PDF přes `pages`, nejvýš 5 stran najednou),
+   přečti ji, doplň do poznámky a vyřeš: `--vynech "<cesta>" npN "přečteno z originálu, strany …"`. Jinak ji nech – uživatel ji uvidí jako „k ověření“.
 3. Nečti celý trezor. Na orientaci používej `ls` a vestavěné vyhledávání (Glob/Grep) – `find` a `rm` jsou zakázané, `mv` nepoužívej (místo něj `priprav.py --presun`). Seznam pojmů zjisti přes `ls _Pojmy`.
 4. Poznámku napiš jedním zápisem (Write) a znovu ji nečti. Co ukáže kontrola úplnosti, doplň přes Edit.
-5. U položek `VELKÉ` udělej jen shrnutí + pojmy, ne detailní výpisky. V kontrole úplnosti pak zbylé položky vynech
-   s důvodem „VELKÉ – jen shrnutí“ a zapiš `--k-overeni "<cesta>" "Zpracováno jen jako shrnutí (VELKÉ)"`, ať je mezera vidět.
+5. U položek `VELKÉ` se nejdřív zeptej uživatele (po kapitolách / jen shrnutí / přeskočit, viz `/zpracuj`). Po kapitolách čti
+   vždy jen jednu kapitolu cache. Když zvolí jen shrnutí, zbylé položky kontroly vynech s důvodem „VELKÉ – jen shrnutí“
+   a zapiš `--k-overeni "<cesta>" "Zpracováno jen jako shrnutí (VELKÉ)"`, ať je mezera vidět.
 6. Vlastní odevzdané práce (soubory začínající UČO z `_Systém/nastaveni.json`, `HOTOVO_`, `PŘÍRUČKA`, texty úkolů psané uživatelem) nesumarizuj –
    jen je zapiš do přehledu předmětu pod „Odevzdáno“ a označ `--preskoc`. Stačí přečíst prvních ~20 řádků cache.
 7. Duplicity řeší skript sám, neotevírej je. Dvě různé verze téže přednášky (podobný název, např. `…_redesign_xxx.pptx`)
@@ -85,10 +89,11 @@ Datum vždy `YYYY-MM-DD`. Hodnotu s dvojtečkou dej do uvozovek (jinak se vlastn
 
 1. Shrnutí v 5 bodech
 2. Strukturované výpisky (nadpisy podle témat, ne podle slajdů)
-3. Klíčové pojmy jako `[[odkazy]]` – pro max. 5 nejdůležitějších vytvoř/doplň poznámku v `_Pojmy`
+3. Klíčové pojmy jako `[[odkazy]]` – pro každý pojem, který materiál definuje nebo který je zkoušitelný, vytvoř/doplň poznámku v `_Pojmy`
    (existující pojem jen doplň o odkaz na nový předmět, nepřepisuj)
-4. Myšlenková mapa v Mermaid (`mindmap`, max. ~20 uzlů, krátké popisky bez závorek a uvozovek)
-5. Kartičky pro Spaced Repetition: řádky `Otázka::Odpověď` pod nadpisem s tagem `#flashcards/<KÓD>`, 5–10 kusů
+4. Myšlenková mapa v Mermaid (`mindmap`, uzly podle obsahu – všechna hlavní témata a jejich podtémata; krátké popisky bez závorek a uvozovek)
+5. Kartičky pro Spaced Repetition: řádky `Otázka::Odpověď` pod nadpisem s tagem `#flashcards/<KÓD>` – na všechny zkoušitelné
+   definice, fakta, data a vztahy; počet se řídí materiálem, ne pevným stropem
 6. Prázdná sekce „Moje postřehy“ pro uživatele
 7. `zdroj: "[[název originálu.pptx]]"` (podle něj kontrola úplnosti poznámku najde; vlastnost `uplnost` doplní skript sám)
 

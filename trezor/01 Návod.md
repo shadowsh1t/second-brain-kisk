@@ -110,7 +110,8 @@ Předplatné Claude má limit použití, který se průběžně obnovuje. Nejví
 - **Dlouhé povídání v jednom okně je drahé.** S každou zprávou AI znovu čte celý dosavadní rozhovor, takže každá další odpověď stojí víc. Na novou věc otevři nové sezení.
 - **Sonnet stačí.** Na výpisky, pojmy a kartičky je Sonnet dost dobrý a čerpá limit pomaleji než Opus. Model přepneš v Claude Code příkazem `/model`.
 - **Text místo obrázků.** `priprav.py` předem zdarma vytáhne text z PDF, Wordu a prezentací (i tabulky, data grafů, poznámky přednášejícího a odkazy) a ze skenů a obrázků ho rozpozná macOS. AI pak čte jen tenhle text a na obrázky se dívá jen tam, kde je na slajdu hlavně obrázek.
-- **Velké materiály** (*VELKÉ* ve frontě) se zpracují jen jako shrnutí a vlastní práce se jen zapíšou do přehledu předmětu.
+- **Velké materiály** (*VELKÉ* ve frontě) se rozdělí na kapitoly. AI se zeptá, jestli je zpracovat po kapitolách (s odhadem tokenů), jen jako shrnutí, nebo je zatím přeskočit. Vlastní práce se jen zapíšou do přehledu předmětu.
+- **Co skript nepřečte** (strany a obrázky nad limit OCR), ukáže fronta s ⚠️ a poznámka pak čeká v části *K ověření*.
 
 ### ✍️ Bez AI – co máš navíc
 - **📝 Nová poznámka k materiálu** – poznámka ze šablony, která se sama zařadí k předmětu (Domov ji ukáže); materiál se otevře vedle, takže čteš a píšeš zároveň.
